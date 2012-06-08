@@ -79,7 +79,8 @@ def image_get(context, image_id, session=None):
     return image
 
 
-def image_get_all(context, filters=None):
+def image_get_all(context, filters=None, marker=None, limit=None,
+                  sort_key='created_at', sort_dir='desc'):
     images = DATA['images'].values()
     LOG.info('Listing images: %s' % (images))
     return images

@@ -15,6 +15,7 @@
 
 import datetime
 import json
+import stubout
 
 import webob
 
@@ -24,10 +25,14 @@ from glance.common import utils
 import glance.schema
 import glance.tests.unit.utils as unit_test_utils
 import glance.tests.utils as test_utils
+from glance.openstack.common import cfg
 
 
 DATETIME = datetime.datetime(2012, 5, 16, 15, 27, 36, 325355)
 ISOTIME = '2012-05-16T15:27:36Z'
+
+
+CONF = cfg.CONF
 
 
 class TestImagesController(test_utils.BaseTestCase):
@@ -36,6 +41,11 @@ class TestImagesController(test_utils.BaseTestCase):
         super(TestImagesController, self).setUp()
         self.db = unit_test_utils.FakeDB()
         self.controller = glance.api.v2.images.ImagesController(self.db)
+        self.stubs = stubout.StubOutForTesting()
+
+    def tearDown(self):
+        super(TestImagesController, self).tearDown()
+        self.stubs.UnsetAll()
 
     def test_index(self):
         request = unit_test_utils.get_fake_request()
@@ -43,6 +53,85 @@ class TestImagesController(test_utils.BaseTestCase):
         self.assertEqual(2, len(output))
         self.assertEqual(output[0]['id'], unit_test_utils.UUID1)
         self.assertEqual(output[1]['id'], unit_test_utils.UUID2)
+
+    def test_index_with_marker(self):
+        called = {'image_get_all': False}
+
+        def fake_images_get_all(*_args, **_kwargs):
+            self.assertEqual(_kwargs.get('marker'), unit_test_utils.UUID1)
+            called['image_get_all'] = True
+            return []
+        self.stubs.Set(self.db, 'image_get_all', fake_images_get_all)
+
+        path = '/images?marker=%s' % unit_test_utils.UUID1
+        request = unit_test_utils.get_fake_request(path)
+        output = self.controller.index(request, marker=unit_test_utils.UUID1)
+        self.assertTrue(called['image_get_all'])
+
+    def test_index_with_limit(self):
+        called = {'image_get_all': False}
+        limit = 1
+
+        def fake_images_get_all(*_args, **_kwargs):
+            self.assertEqual(_kwargs.get('limit'), limit)
+            called['image_get_all'] = True
+            return []
+        self.stubs.Set(self.db, 'image_get_all', fake_images_get_all)
+
+        path = '/images?limit=%s' % limit
+        request = unit_test_utils.get_fake_request(path)
+        output = self.controller.index(request, limit=limit)
+        self.assertTrue(called['image_get_all'])
+
+    def test_index_with_sort_dir(self):
+        called = {'image_get_all': False}
+        sort_dir = 'asc'
+
+        def fake_images_get_all(*_args, **_kwargs):
+            self.assertEqual(_kwargs.get('sort_dir'), sort_dir)
+            called['image_get_all'] = True
+            return []
+        self.stubs.Set(self.db, 'image_get_all', fake_images_get_all)
+
+        path = '/images?sort_dir=%s' % sort_dir
+        request = unit_test_utils.get_fake_request(path)
+        output = self.controller.index(request, sort_dir=sort_dir)
+        self.assertTrue(called['image_get_all'])
+
+    def test_index_with_sort_key(self):
+        called = {'image_get_all': False}
+        sort_key = 'id'
+
+        def fake_images_get_all(*_args, **_kwargs):
+            self.assertEqual(_kwargs.get('sort_key'), sort_key)
+            called['image_get_all'] = True
+            return []
+        self.stubs.Set(self.db, 'image_get_all', fake_images_get_all)
+
+        path = '/images?sort_key=%s' % sort_key
+        request = unit_test_utils.get_fake_request(path)
+        output = self.controller.index(request, sort_key=sort_key)
+        self.assertTrue(called['image_get_all'])
+
+    def test_index_invalid_sort_key(self):
+
+        def fake_raises_invalid_sort_key(*_args, **_kwargs):
+            raise exception.InvalidSortKey()
+        self.stubs.Set(self.db, 'image_get_all', fake_raises_invalid_sort_key)
+
+        request = unit_test_utils.get_fake_request('/images?sort_key=blah')
+        self.assertRaises(webob.exc.HTTPBadRequest, self.controller.index,
+                          request)
+
+    def test_index_with_marker_not_found(self):
+        fake_uuid = utils.generate_uuid()
+        request = unit_test_utils.get_fake_request()
+
+        def raise_not_found(*_args, **_kwargs):
+            raise exception.NotFound()
+        self.stubs.Set(self.db, "image_get_all", raise_not_found)
+        self.assertRaises(webob.exc.HTTPBadRequest,
+                          self.controller.index, request, marker=fake_uuid)
 
     def test_index_zero_images(self):
         self.db.reset()
@@ -137,6 +226,16 @@ class TestImagesController(test_utils.BaseTestCase):
         self.assertRaises(webob.exc.HTTPNotFound, self.controller.update,
                           request, utils.generate_uuid(), image)
 
+    def test_index_with_invalid_marker(self):
+        fake_uuid = utils.generate_uuid()
+        request = unit_test_utils.get_fake_request()
+
+        def raise_not_found(*_args, **_kwargs):
+            raise exception.NotFound()
+        self.stubs.Set(self.db, "image_get_all", raise_not_found)
+        self.assertRaises(webob.exc.HTTPBadRequest,
+                          self.controller.index, request, marker=fake_uuid)
+
 
 class TestImagesDeserializer(test_utils.BaseTestCase):
 
@@ -210,6 +309,92 @@ class TestImagesDeserializer(test_utils.BaseTestCase):
             output = self.deserializer.update(request)
             expected = {'image': {'properties': {}}}
             self.assertEqual(expected, output)
+
+    def test_index(self):
+        marker = utils.generate_uuid()
+        path = '/images?limit=1&marker=%s' % marker
+        request = unit_test_utils.get_fake_request(path)
+        expected = {'limit': 1,
+                    'marker': marker,
+                    'sort_key': 'created_at',
+                    'sort_dir': 'desc'}
+        output = self.deserializer.index(request)
+        self.assertEqual(output, expected)
+
+    def test_index_default(self):
+        limit_param_default = CONF.limit_param_default
+        request = unit_test_utils.get_fake_request('/images')
+        expected = {'limit': limit_param_default,
+                    'sort_key': 'created_at',
+                    'sort_dir': 'desc'}
+        output = self.deserializer.index(request)
+        self.assertEqual(output, expected)
+
+    def test_index_non_integer_limit(self):
+        request = unit_test_utils.get_fake_request('/images?limit=blah')
+        self.assertRaises(webob.exc.HTTPBadRequest,
+                          self.deserializer.index, request)
+
+    def test_index_zero_limit(self):
+        request = unit_test_utils.get_fake_request('/images?limit=0')
+        self.assertRaises(webob.exc.HTTPBadRequest,
+                          self.deserializer.index, request)
+
+    def test_index_negative_limit(self):
+        request = unit_test_utils.get_fake_request('/images?limit=-1')
+        self.assertRaises(webob.exc.HTTPBadRequest,
+                          self.deserializer.index, request)
+
+    def test_index_fraction(self):
+        request = unit_test_utils.get_fake_request('/images?limit=1.1')
+        self.assertRaises(webob.exc.HTTPBadRequest,
+                          self.deserializer.index, request)
+
+    def test_index_greater_than_limit_max(self):
+        api_limit_max = CONF.api_limit_max
+        url = '/images?limit=%s' % (api_limit_max + 1)
+        request = unit_test_utils.get_fake_request(url)
+        output = self.deserializer.index(request)
+        self.assertEqual(output['limit'], api_limit_max)
+
+    def test_index_marker(self):
+        marker = utils.generate_uuid()
+        path = '/images?marker=%s' % marker
+        request = unit_test_utils.get_fake_request(path)
+        self.assertRaises(webob.exc.HTTPBadRequest,
+                          self.deserializer.index, request)
+
+    def test_index_marker_not_valid(self):
+        request = unit_test_utils.get_fake_request('/images?marker=foo')
+        self.assertRaises(webob.exc.HTTPBadRequest,
+                          self.deserializer.index, request)
+
+    def test_index_marker(self):
+        marker = utils.generate_uuid()
+        path = '/images?marker=%s' % marker
+        request = unit_test_utils.get_fake_request(path)
+        output = self.deserializer.index(request)
+        self.assertEqual(output.get('marker'), marker)
+
+    def test_index_marker_not_specified(self):
+        request = unit_test_utils.get_fake_request('/images')
+        output = self.deserializer.index(request)
+        self.assertFalse('marker' in output)
+
+    def test_index_sort_key_id(self):
+        request = unit_test_utils.get_fake_request('/images?sort_key=id')
+        output = self.deserializer.index(request)
+        self.assertEqual(output.get('sort_key'), 'id')
+
+    def test_index_sort_dir_asc(self):
+        request = unit_test_utils.get_fake_request('/images?sort_dir=asc')
+        output = self.deserializer.index(request)
+        self.assertEqual(output.get('sort_dir'), 'asc')
+
+    def test_index_sort_dir_bad_value(self):
+        request = unit_test_utils.get_fake_request('/images?sort_dir=blah')
+        self.assertRaises(webob.exc.HTTPBadRequest,
+                          self.deserializer.index, request)
 
 
 class TestImagesDeserializerWithExtendedSchema(test_utils.BaseTestCase):

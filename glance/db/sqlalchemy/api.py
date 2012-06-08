@@ -320,14 +320,17 @@ def paginate_query(query, model, limit, sort_keys, marker=None,
     assert(len(sort_dirs) == len(sort_keys))
 
     # Add sorting
-    for current_sort_key, current_sort_dir in zip(sort_keys, sort_dirs):
-        sort_dir_func = {
+    for key, direction in zip(sort_keys, sort_dirs):
+        direction_func = {
             'asc': asc,
             'desc': desc,
-        }[current_sort_dir]
+        }[direction]
 
-        sort_key_attr = getattr(model, current_sort_key)
-        query = query.order_by(sort_dir_func(sort_key_attr))
+        try:
+            sort_key_attr = getattr(model, key)
+        except AttributeError as e:
+            raise exception.InvalidSortKey(unicode(e))
+        query = query.order_by(direction_func(sort_key_attr))
 
     # Add pagination
     if marker is not None:

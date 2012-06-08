@@ -23,10 +23,21 @@ from glance.common import utils
 from glance.common import wsgi
 import glance.db.sqlalchemy.api
 from glance.openstack.common import timeutils
+from glance.openstack.common import cfg
+
+
+CONF = cfg.CONF
 
 
 class ImagesController(object):
-    def __init__(self, db_api=None):
+    def __init__(self, db_api=None, limit_default=None, limit_max=None):
+        super(ImagesController, self).__init__()
+        if limit_default is None:
+            limit_default = CONF.limit_param_default
+        self.limit_default = limit_default
+        if limit_max is None:
+            limit_max = CONF.api_limit_max
+        self.limit_max = limit_max
         self.db_api = db_api or glance.db.sqlalchemy.api
         self.db_api.configure_db()
 
@@ -75,11 +86,24 @@ class ImagesController(object):
 
         return self._normalize_properties(dict(image))
 
-    def index(self, req):
+    def index(self, req, marker=None, limit=None, sort_key='created_at',
+              sort_dir='desc'):
         #NOTE(bcwaldon): is_public=True gets public images and those
         # owned by the authenticated tenant
         filters = {'deleted': False, 'is_public': True}
-        images = self.db_api.image_get_all(req.context, filters=filters)
+        if limit is None:
+            limit = self.limit_default
+
+        limit = min(self.limit_max, limit)
+        try:
+            images = self.db_api.image_get_all(req.context, filters=filters,
+                                               marker=marker, limit=limit,
+                                               sort_key=sort_key,
+                                               sort_dir=sort_dir)
+        except exception.InvalidSortKey as e:
+            raise webob.exc.HTTPBadRequest(explanation=unicode(e))
+        except exception.NotFound as e:
+            raise webob.exc.HTTPBadRequest(explanation=unicode(e))
         images = [self._normalize_properties(dict(image)) for image in images]
         return [self._append_tags(req.context, image) for image in images]
 
@@ -155,6 +179,48 @@ class RequestDeserializer(wsgi.JSONRequestDeserializer):
 
     def update(self, request):
         return self._parse_image(request)
+
+    def _format_limit(self, limit):
+        try:
+            limit = int(limit)
+        except ValueError:
+            msg = _("limit param must be an integer")
+            raise webob.exc.HTTPBadRequest(explanation=msg)
+
+        if limit <= 0:
+            msg = _("limit param must be positive")
+            raise webob.exc.HTTPBadRequest(explanation=msg)
+
+        return limit
+
+    def _format_marker(self, marker):
+        if not utils.is_uuid_like(marker):
+            msg = _('Invalid marker format')
+            raise webob.exc.HTTPBadRequest(explanation=msg)
+
+        return marker
+
+    def _format_sort_dir(self, sort_dir):
+        if sort_dir not in ['asc', 'desc']:
+            msg = _('Invalid sort direction: %s' % sort_dir)
+            raise webob.exc.HTTPBadRequest(explanation=msg)
+
+        return sort_dir
+
+    def index(self, request):
+        limit = request.params.get('limit')
+        marker = request.params.get('marker')
+        sort_dir = request.params.get('sort_dir', 'desc')
+        query_params = {
+            'sort_key': request.params.get('sort_key', 'created_at'),
+            'sort_dir': self._format_sort_dir(sort_dir),
+            'limit': self._format_limit(limit)
+        }
+
+        if marker is not None:
+            query_params['marker'] = self._format_marker(marker)
+
+        return query_params
 
 
 class ResponseSerializer(wsgi.JSONResponseSerializer):
