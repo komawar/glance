@@ -20,7 +20,11 @@ import json
 import requests
 
 from glance.common import utils
+from glance.openstack.common import cfg
 from glance.tests import functional
+
+
+CONF = cfg.CONF
 
 
 TENANT1 = utils.generate_uuid()
@@ -36,6 +40,7 @@ class TestImages(functional.FunctionalTest):
         self.cleanup()
         self.api_server.deployment_flavor = 'noauth'
         self.start_servers(**self.__dict__.copy())
+        self.config(allow_image_location_visible=True)
 
     def _url(self, path):
         return 'http://127.0.0.1:%d%s' % (self.api_port, path)
@@ -184,6 +189,7 @@ class TestImages(functional.FunctionalTest):
         self.stop_servers()
 
     def test_permissions(self):
+        self.config(allow_image_location_visible=True)
         # Create an image that belongs to TENANT1
         path = self._url('/v2/images')
         headers = self._headers({'Content-Type': 'application/json'})
@@ -201,7 +207,8 @@ class TestImages(functional.FunctionalTest):
 
         # TENANT1 should be able to access the image directly
         path = self._url('/v2/images/%s' % image_id)
-        response = requests.get(path, headers=self._headers())
+        headers = self._headers({'Content-Type': 'application/json'})
+        response = requests.get(path, headers=headers)
         self.assertEqual(200, response.status_code)
 
         # TENANT2 should not see the image in their list
@@ -218,7 +225,7 @@ class TestImages(functional.FunctionalTest):
         response = requests.get(path, headers=headers)
         self.assertEqual(404, response.status_code)
 
-        # TENANT2 should not be able to modify the image, either
+        # TENANT2 should not be able to modify the image either
         path = self._url('/v2/images/%s' % image_id)
         headers = self._headers({
             'Content-Type': 'application/json',
@@ -228,7 +235,7 @@ class TestImages(functional.FunctionalTest):
         response = requests.put(path, headers=headers, data=data)
         self.assertEqual(404, response.status_code)
 
-        # TENANT2 should not be able to delete the image, either
+        # TENANT2 should not be able to delete the image either
         path = self._url('/v2/images/%s' % image_id)
         headers = self._headers({'X-Tenant-Id': TENANT2})
         response = requests.delete(path, headers=headers)
@@ -266,7 +273,7 @@ class TestImages(functional.FunctionalTest):
         response = requests.put(path, headers=headers, data=data)
         self.assertEqual(404, response.status_code)
 
-        # TENANT2 should not be able to delete the image, either
+        # TENANT2 should not be able to delete the image either
         path = self._url('/v2/images/%s' % image_id)
         headers = self._headers({'X-Tenant-Id': TENANT2})
         response = requests.delete(path, headers=headers)
@@ -278,6 +285,21 @@ class TestImages(functional.FunctionalTest):
         response = requests.get(path, headers=headers)
         self.assertEqual(404, response.status_code)
 
+        # location should be visible if config flag is True
+        path = self._url('/v2/images/%s' % image_id)
+        #path = self._url('/v2/images')
+        headers = self._headers({'Content-Type': 'application/json'})
+        response = requests.get(path, headers=headers)
+        self.assertEqual(200, response.status_code)
+        print CONF.allow_image_location_visible
+        print response.text
+        #self.fail()
+        image = json.loads(response.text)
+        #resp = json.loads(response.text)
+        #self.assertTrue('location' in resp)
+        #for image in images:
+        self.assertTrue('location' in image)
+
         # Publicize the image as an admin of TENANT1
         path = self._url('/v2/images/%s' % image_id)
         headers = self._headers({
@@ -287,6 +309,17 @@ class TestImages(functional.FunctionalTest):
         data = json.dumps({'visibility': 'public'})
         response = requests.put(path, headers=headers, data=data)
         self.assertEqual(200, response.status_code)
+
+        # location should not be visible to if config flag is False
+        self.config(allow_image_location_visible=False)
+        #path = self._url('/v2/images/%s' % image_id)
+        path = self._url('/v2/images')
+        headers = self._headers({'Content-Type': 'application/json'})
+        response = requests.get(path, headers=headers)
+        self.assertEqual(200, response.status_code)
+        images = json.loads(response.text)['images']
+        for image in images:
+            self.assertTrue('location' in image)
 
         # TENANT3 should now see the image in their list
         path = self._url('/v2/images')

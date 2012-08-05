@@ -117,7 +117,15 @@ class ImagesController(object):
             image = self.db_api.image_get(req.context, image_id)
         except (exception.NotFound, exception.Forbidden):
             raise webob.exc.HTTPNotFound()
-        image = self._normalize_properties(dict(image))
+        image = dict(image)
+        LOG.warn('NSK')
+        LOG.warn('%s' % image)
+        LOG.warn('CONF %s' % CONF.allow_image_location_visible)
+        if not CONF.allow_image_location_visible:
+            del image['location']
+        LOG.warn('NSK-2')
+        LOG.warn('%s' % image)
+        image = self._normalize_properties(image)
         return self._append_tags(req.context, image)
 
     @utils.mutating
@@ -273,6 +281,8 @@ class ResponseSerializer(wsgi.JSONResponseSerializer):
         for key in ['id', 'name', 'created_at', 'updated_at', 'tags', 'size',
                     'owner', 'checksum', 'status']:
             _image[key] = image[key]
+        if 'location' in image:
+            _image['location'] = image['location']
         _image['visibility'] = 'public' if image['is_public'] else 'private'
         _image = self.schema.filter(_image)
         _image['self'] = self._get_image_href(image)
@@ -379,6 +389,10 @@ _BASE_PROPERTIES = {
             'type': 'string',
             'maxLength': 255,
         },
+    },
+    'location': {
+        'type': 'string',
+        'description': 'Url of the image',
     },
     'self': {'type': 'string'},
     'access': {'type': 'string'},

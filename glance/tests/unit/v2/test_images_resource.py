@@ -54,6 +54,7 @@ class TestImagesController(test_utils.BaseTestCase):
         self._create_images()
         self.controller = glance.api.v2.images.ImagesController(self.db)
         glance.store.create_stores()
+        self.config(allow_image_location_visible=True)
 
     def _create_images(self):
         self.db.reset()
@@ -297,7 +298,26 @@ class TestImagesController(test_utils.BaseTestCase):
             'name': '2',
             'owner': TENANT1,
             'size': 512,
+            'status': 'queued',
+            'is_public': True,
             'location': None,
+            'tags': [],
+            'properties': {},
+            'deleted': False,
+        }
+        self.assertEqual(expected, output)
+
+    def test_show_location_not_visible(self):
+        self.config(allow_image_location_visible=False)
+        request = unit_test_utils.get_fake_request()
+        output = self.controller.show(request, image_id=UUID2)
+        for key in ['created_at', 'updated_at']:
+            output.pop(key)
+        expected = {
+            'id': UUID2,
+            'name': '2',
+            'owner': TENANT1,
+            'size': 512,
             'status': 'queued',
             'is_public': True,
             'tags': [],

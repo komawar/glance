@@ -52,6 +52,7 @@ class TestSchemas(functional.FunctionalTest):
             'status',
             'access',
             'schema',
+            'location',
         ])
         self.assertEqual(expected, set(image_schema['properties'].keys()))
 

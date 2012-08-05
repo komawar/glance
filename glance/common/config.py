@@ -47,6 +47,10 @@ common_opts = [
     cfg.IntOpt('api_limit_max', default=1000,
                help=_('Maximum permissible number of items that could be '
                'returned by a request')),
+    cfg.BoolOpt('allow_image_location_visible', default=False,
+                help=_('Whether to allow users to see image location.'
+                'Should be kept True for internal deployment and False'
+                'for public facing deployments.')),
 ]
 
 CONF = cfg.CONF
