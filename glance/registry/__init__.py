@@ -31,14 +31,15 @@ LOG = logging.getLogger(__name__)
 registry_addr_opts = [
     cfg.StrOpt('registry_host', default='0.0.0.0'),
     cfg.IntOpt('registry_port', default=9191),
-    ]
+]
 registry_client_opts = [
     cfg.StrOpt('registry_client_protocol', default='http'),
     cfg.StrOpt('registry_client_key_file'),
     cfg.StrOpt('registry_client_cert_file'),
     cfg.StrOpt('registry_client_ca_file'),
+    cfg.BoolOpt('registry_client_insecure', default=False),
     cfg.StrOpt('metadata_encryption_key', secret=True),
-    ]
+]
 registry_client_ctx_opts = [
     cfg.StrOpt('admin_user', secret=True),
     cfg.StrOpt('admin_password', secret=True),
@@ -46,7 +47,7 @@ registry_client_ctx_opts = [
     cfg.StrOpt('auth_url'),
     cfg.StrOpt('auth_strategy', default='noauth'),
     cfg.StrOpt('auth_region'),
-    ]
+]
 
 CONF = cfg.CONF
 CONF.register_opts(registry_addr_opts)
@@ -84,8 +85,9 @@ def configure_registry_client():
         'use_ssl': CONF.registry_client_protocol.lower() == 'https',
         'key_file': CONF.registry_client_key_file,
         'cert_file': CONF.registry_client_cert_file,
-        'ca_file': CONF.registry_client_ca_file
-        }
+        'ca_file': CONF.registry_client_ca_file,
+        'insecure': CONF.registry_client_insecure,
+    }
 
 
 def configure_registry_admin_creds():

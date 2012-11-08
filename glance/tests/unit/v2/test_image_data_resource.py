@@ -61,9 +61,10 @@ class TestImagesController(base.StoreClearingUnitTest):
         self.assertEqual(4, output['meta']['size'])
         self.assertEqual('YYYY', output['data'])
         output_log = self.notifier.get_log()
-        expected_log = {'notification_type': "INFO",
-                        'event_type': "image.upload",
-                        'payload': output['meta'],
+        expected_log = {
+            'notification_type': "INFO",
+            'event_type': "image.upload",
+            'payload': output['meta'],
         }
         self.assertEqual(output_log, expected_log)
 
@@ -80,8 +81,8 @@ class TestImagesController(base.StoreClearingUnitTest):
     def test_upload_storage_full(self):
         request = unit_test_utils.get_fake_request()
         self.assertRaises(webob.exc.HTTPRequestEntityTooLarge,
-                         self.controller.upload,
-                         request, unit_test_utils.UUID2, 'YYYYYYY', 7)
+                          self.controller.upload,
+                          request, unit_test_utils.UUID2, 'YYYYYYY', 7)
 
     def test_upload_storage_forbidden(self):
         request = unit_test_utils.get_fake_request(user=unit_test_utils.USER2)
@@ -91,8 +92,8 @@ class TestImagesController(base.StoreClearingUnitTest):
     def test_upload_storage_write_denied(self):
         request = unit_test_utils.get_fake_request(user=unit_test_utils.USER3)
         self.assertRaises(webob.exc.HTTPServiceUnavailable,
-                         self.controller.upload,
-                         request, unit_test_utils.UUID2, 'YY', 2)
+                          self.controller.upload,
+                          request, unit_test_utils.UUID2, 'YY', 2)
 
     def test_upload_download_no_size(self):
         request = unit_test_utils.get_fake_request()
@@ -182,7 +183,7 @@ class TestImageDataDeserializer(test_utils.BaseTestCase):
         request.headers['Content-Type'] = 'application/json'
         request.body = 'YYYYY'
         self.assertRaises(webob.exc.HTTPUnsupportedMediaType,
-            self.deserializer.upload, request)
+                          self.deserializer.upload, request)
 
 
 class TestImageDataSerializer(test_utils.BaseTestCase):

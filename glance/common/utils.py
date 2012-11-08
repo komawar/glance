@@ -340,17 +340,17 @@ def get_terminal_size():
 
         try:
             height_width = struct.unpack('hh', fcntl.ioctl(sys.stderr.fileno(),
-                                        termios.TIOCGWINSZ,
-                                        struct.pack('HH', 0, 0)))
+                                         termios.TIOCGWINSZ,
+                                         struct.pack('HH', 0, 0)))
         except:
             pass
 
         if not height_width:
             try:
                 p = subprocess.Popen(['stty', 'size'],
-                                    shell=False,
-                                    stdout=subprocess.PIPE,
-                                    stderr=open(os.devnull, 'w'))
+                                     shell=False,
+                                     stdout=subprocess.PIPE,
+                                     stderr=open(os.devnull, 'w'))
                 result = p.communicate()
                 if p.returncode == 0:
                     return tuple(int(x) for x in result[0].split())
@@ -371,7 +371,7 @@ def get_terminal_size():
             import struct
             unpack_tmp = struct.unpack("hhhhHhhhhhh", csbi.raw)
             (bufx, bufy, curx, cury, wattr,
-            left, top, right, bottom, maxx, maxy) = unpack_tmp
+             left, top, right, bottom, maxx, maxy) = unpack_tmp
             height = bottom - top + 1
             width = right - left + 1
             return (height, width)
@@ -386,7 +386,7 @@ def get_terminal_size():
 
     height_width = func.get(platform.os.name, _get_terminal_size_unknownOS)()
 
-    if height_width == None:
+    if height_width is None:
         raise exception.Invalid()
 
     for i in height_width:

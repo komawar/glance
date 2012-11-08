@@ -42,7 +42,7 @@ CONF = cfg.CONF
 
 class ImagesController(object):
     def __init__(self, db_api=None, policy_enforcer=None, notifier=None,
-            store_api=None):
+                 store_api=None):
         self.db_api = db_api or glance.db.get_api()
         self.db_api.configure_db()
         self.policy = policy_enforcer or policy.Enforcer()
@@ -105,7 +105,6 @@ class ImagesController(object):
         else:
             image['tags'] = []
 
-        v2.update_image_read_acl(req, self.store_api, self.db_api, image)
         image = self._normalize_properties(dict(image))
         self.notifier.info('image.update', image)
         return image
@@ -114,10 +113,7 @@ class ImagesController(object):
               sort_dir='desc', filters={}):
         self._enforce(req, 'get_images')
         filters['deleted'] = False
-        #NOTE(bcwaldon): is_public=True gets public images and those
-        # owned by the authenticated tenant
         result = {}
-        filters.setdefault('is_public', True)
         if limit is None:
             limit = CONF.limit_param_default
         limit = min(CONF.api_limit_max, limit)
@@ -142,9 +138,12 @@ class ImagesController(object):
 
     def _get_image(self, context, image_id):
         try:
-            return self.db_api.image_get(context, image_id)
+            image = self.db_api.image_get(context, image_id)
+            if image['deleted']:
+                raise exception.NotFound()
         except (exception.NotFound, exception.Forbidden):
             raise webob.exc.HTTPNotFound()
+        return image
 
     def show(self, req, image_id):
         self._enforce(req, 'get_image')
@@ -158,6 +157,8 @@ class ImagesController(object):
         context = req.context
         try:
             image = self.db_api.image_get(context, image_id)
+            if image['deleted']:
+                raise exception.NotFound()
         except (exception.NotFound, exception.Forbidden):
             msg = ("Failed to find image %(image_id)s to update" % locals())
             LOG.info(msg)
@@ -176,8 +177,6 @@ class ImagesController(object):
             except (exception.NotFound, exception.Forbidden):
                 raise webob.exc.HTTPNotFound()
             image = self._normalize_properties(dict(image))
-
-        v2.update_image_read_acl(req, self.store_api, self.db_api, image)
 
         if tags is not None:
             self.db_api.image_tag_set_all(req.context, image_id, tags)
@@ -292,12 +291,13 @@ class ImagesController(object):
 class RequestDeserializer(wsgi.JSONRequestDeserializer):
 
     _readonly_properties = ['created_at', 'updated_at', 'status', 'checksum',
-            'size', 'direct_url', 'self', 'file', 'schema']
-    _reserved_properties = ['owner', 'is_public', 'location',
-            'deleted', 'deleted_at']
+                            'size', 'direct_url', 'self', 'file', 'schema']
+    _reserved_properties = ['owner', 'is_public', 'location', 'deleted',
+                            'deleted_at']
     _base_properties = ['checksum', 'created_at', 'container_format',
-            'disk_format', 'id', 'min_disk', 'min_ram', 'name', 'size',
-            'status', 'tags', 'updated_at', 'visibility', 'protected']
+                        'disk_format', 'id', 'min_disk', 'min_ram', 'name',
+                        'size', 'status', 'tags', 'updated_at', 'visibility',
+                        'protected']
 
     def __init__(self, schema=None):
         super(RequestDeserializer, self).__init__()
@@ -578,9 +578,9 @@ class ResponseSerializer(wsgi.JSONResponseSerializer):
         params.pop('marker', None)
         query = urllib.urlencode(params)
         body = {
-               'images': [self._format_image(i) for i in result['images']],
-               'first': '/v2/images',
-               'schema': '/v2/schemas/images',
+            'images': [self._format_image(i) for i in result['images']],
+            'first': '/v2/images',
+            'schema': '/v2/schemas/images',
         }
         if query:
             body['first'] = '%s?%s' % (body['first'], query)
@@ -608,10 +608,10 @@ _BASE_PROPERTIES = {
         'maxLength': 255,
     },
     'status': {
-      'type': 'string',
-      'description': 'Status of the image',
-      'enum': ['queued', 'saving', 'active', 'killed',
-               'deleted', 'pending_delete'],
+        'type': 'string',
+        'description': 'Status of the image',
+        'enum': ['queued', 'saving', 'active', 'killed',
+                 'deleted', 'pending_delete'],
     },
     'visibility': {
         'type': 'string',

@@ -44,7 +44,8 @@ def get_isolated_test_env():
     is created.
     """
     test_id = random.randint(0, 100000)
-    test_dir = os.path.join("/", "tmp", "test.%d" % test_id)
+    test_tmp_dir = os.getenv('GLANCE_TEST_TMP_DIR', '/tmp')
+    test_dir = os.path.join(test_tmp_dir, "test.%d" % test_id)
     utils.safe_mkdirs(test_dir)
     return test_id, test_dir
 
@@ -328,10 +329,11 @@ def xattr_writes_supported(path):
 
 
 def minimal_headers(name, public=True):
-    headers = {'Content-Type': 'application/octet-stream',
-               'X-Image-Meta-Name': name,
-               'X-Image-Meta-disk_format': 'raw',
-               'X-Image-Meta-container_format': 'ovf',
+    headers = {
+        'Content-Type': 'application/octet-stream',
+        'X-Image-Meta-Name': name,
+        'X-Image-Meta-disk_format': 'raw',
+        'X-Image-Meta-container_format': 'ovf',
     }
     if public:
         headers['X-Image-Meta-Is-Public'] = 'True'
@@ -347,7 +349,7 @@ def minimal_add_command(port, name, suffix='', public=True):
 
 class FakeAuthMiddleware(wsgi.Middleware):
 
-    def __init__(self, app, is_admin=True):
+    def __init__(self, app, is_admin=False):
         super(FakeAuthMiddleware, self).__init__(app)
         self.is_admin = is_admin
 
@@ -358,6 +360,8 @@ class FakeAuthMiddleware(wsgi.Middleware):
         roles = []
         if auth_tok:
             user, tenant, role = auth_tok.split(':')
+            if tenant.lower() == 'none':
+                tenant = None
             roles = [role]
             req.headers['X-User-Id'] = user
             req.headers['X-Tenant-Id'] = tenant

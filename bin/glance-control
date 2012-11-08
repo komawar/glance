@@ -49,7 +49,7 @@ from glance.openstack.common import cfg
 
 CONF = cfg.CONF
 
-ALL_COMMANDS = ['start', 'stop', 'shutdown', 'restart',
+ALL_COMMANDS = ['start', 'status', 'stop', 'shutdown', 'restart',
                 'reload', 'force-reload']
 ALL_SERVERS = ['glance-api', 'glance-registry', 'glance-scrubber']
 GRACEFUL_SHUTDOWN_SERVERS = ['glance-api', 'glance-registry',
@@ -106,9 +106,9 @@ def do_start(verb, pid_file, server, args):
 
         try:
             resource.setrlimit(resource.RLIMIT_NOFILE,
-                    (MAX_DESCRIPTORS, MAX_DESCRIPTORS))
+                               (MAX_DESCRIPTORS, MAX_DESCRIPTORS))
             resource.setrlimit(resource.RLIMIT_DATA,
-                    (MAX_MEMORY, MAX_MEMORY))
+                               (MAX_MEMORY, MAX_MEMORY))
         except ValueError:
             action = 'increase file descriptor limit'
             print 'Unable to %s.  Running as non-root?' % action
@@ -190,12 +190,19 @@ def do_start(verb, pid_file, server, args):
                 break
             time.sleep(0.05)
 
-
     conf_file = None
     if args and os.path.exists(args[0]):
         conf_file = os.path.abspath(os.path.expanduser(args[0]))
 
     return launch(pid_file, conf_file, CONF.capture_output, CONF.await_child)
+
+
+def do_check_status(pid_file, server):
+    if os.path.exists(pid_file):
+        pid = open(pid_file).read().strip()
+        print "%s running: %s" % (server, pid)
+    else:
+        print "No %s running" % server
 
 
 def get_pid_file(pid, pid_file):
@@ -273,7 +280,7 @@ if __name__ == '__main__':
             cfg.BoolOpt('respawn',
                         default=False,
                         help='Restart service on unexpected death'),
-        ]
+    ]
     CONF.register_cli_opts(opts)
 
     args = config.parse_args(usage=USAGE)
@@ -338,6 +345,11 @@ if __name__ == '__main__':
             children[pid] = args
 
         anticipate_respawn(children)
+
+    if command == 'status':
+        for server in servers:
+            pid_file = get_pid_file(server, CONF.pid_file)
+            do_check_status(pid_file, server)
 
     if command == 'stop':
         for server in servers:

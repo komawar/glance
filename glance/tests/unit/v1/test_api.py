@@ -103,7 +103,8 @@ class TestRegistryAPI(base.IsolatedUnitTest):
         """Establish a clean test environment"""
         super(TestRegistryAPI, self).setUp()
         self.mapper = routes.Mapper()
-        self.api = test_utils.FakeAuthMiddleware(rserver.API(self.mapper))
+        self.api = test_utils.FakeAuthMiddleware(rserver.API(self.mapper),
+                                                 is_admin=True)
         self.FIXTURES = [
             {'id': UUID1,
              'name': 'fake image #1',
@@ -195,6 +196,38 @@ class TestRegistryAPI(base.IsolatedUnitTest):
         """
         req = webob.Request.blank('/images/%s' % _gen_uuid())
         res = req.get_response(self.api)
+        self.assertEquals(res.status_int, 404)
+
+    def test_show_deleted_image_as_admin(self):
+        """
+        Tests that the /images/<id> registry API endpoint
+        returns a 200 for deleted image to admin user.
+        """
+        # Delete image #2
+        req = webob.Request.blank('/images/%s' % UUID2)
+        req.method = 'DELETE'
+        res = req.get_response(self.api)
+        self.assertEquals(res.status_int, 200)
+
+        req = webob.Request.blank('/images/%s' % UUID2)
+        res = req.get_response(self.api)
+        self.assertEquals(res.status_int, 200)
+
+    def test_show_deleted_image_as_nonadmin(self):
+        """
+        Tests that the /images/<id> registry API endpoint
+        returns a 404 for deleted image to non-admin user.
+        """
+        # Delete image #2
+        req = webob.Request.blank('/images/%s' % UUID2)
+        req.method = 'DELETE'
+        res = req.get_response(self.api)
+        self.assertEquals(res.status_int, 200)
+
+        api = test_utils.FakeAuthMiddleware(rserver.API(self.mapper),
+                                            is_admin=False)
+        req = webob.Request.blank('/images/%s' % UUID2)
+        res = req.get_response(api)
         self.assertEquals(res.status_int, 404)
 
     def test_get_root(self):
@@ -1701,7 +1734,7 @@ class TestRegistryAPI(base.IsolatedUnitTest):
         res_dict = json.loads(res.body)
 
         self.assertNotEquals(res_dict['image']['created_at'],
-                            res_dict['image']['updated_at'])
+                             res_dict['image']['updated_at'])
 
         for k, v in fixture.iteritems():
             self.assertEquals(v, res_dict['image'][k])
@@ -1837,7 +1870,7 @@ class TestRegistryAPI(base.IsolatedUnitTest):
         Tests replacing image members raises right exception
         """
         self.api = test_utils.FakeAuthMiddleware(rserver.API(self.mapper),
-                                                     is_admin=False)
+                                                 is_admin=False)
         fixture = dict(member_id='pattieblack')
 
         req = webob.Request.blank('/images/%s/members' % UUID2)
@@ -1853,7 +1886,7 @@ class TestRegistryAPI(base.IsolatedUnitTest):
         Tests adding image members raises right exception
         """
         self.api = test_utils.FakeAuthMiddleware(rserver.API(self.mapper),
-                                                     is_admin=False)
+                                                 is_admin=False)
         req = webob.Request.blank('/images/%s/members/pattieblack' % UUID2)
         req.method = 'PUT'
 
@@ -1865,12 +1898,25 @@ class TestRegistryAPI(base.IsolatedUnitTest):
         Tests deleting image members raises right exception
         """
         self.api = test_utils.FakeAuthMiddleware(rserver.API(self.mapper),
-                                                     is_admin=False)
+                                                 is_admin=False)
         req = webob.Request.blank('/images/%s/members/pattieblack' % UUID2)
         req.method = 'DELETE'
 
         res = req.get_response(self.api)
         self.assertEquals(res.status_int, webob.exc.HTTPUnauthorized.code)
+
+    def test_delete_member_invalid(self):
+        """
+        Tests deleting a invalid/non existing member raises right exception
+        """
+        self.api = test_utils.FakeAuthMiddleware(rserver.API(self.mapper),
+                                                 is_admin=True)
+        req = webob.Request.blank('/images/%s/members/pattieblack' % UUID2)
+        req.method = 'DELETE'
+
+        res = req.get_response(self.api)
+        self.assertEquals(res.status_int, webob.exc.HTTPNotFound.code)
+        self.assertTrue('Membership could not be found' in res.body)
 
 
 class TestGlanceAPI(base.IsolatedUnitTest):
@@ -1954,11 +2000,13 @@ class TestGlanceAPI(base.IsolatedUnitTest):
                 self._do_test_defaulted_format(key, value)
 
     def test_bad_disk_format(self):
-        fixture_headers = {'x-image-meta-store': 'bad',
-                   'x-image-meta-name': 'bogus',
-                   'x-image-meta-location': 'http://localhost:0/image.tar.gz',
-                   'x-image-meta-disk-format': 'invalid',
-                   'x-image-meta-container-format': 'ami'}
+        fixture_headers = {
+            'x-image-meta-store': 'bad',
+            'x-image-meta-name': 'bogus',
+            'x-image-meta-location': 'http://localhost:0/image.tar.gz',
+            'x-image-meta-disk-format': 'invalid',
+            'x-image-meta-container-format': 'ami',
+        }
 
         req = webob.Request.blank("/images")
         req.method = 'POST'
@@ -1970,10 +2018,12 @@ class TestGlanceAPI(base.IsolatedUnitTest):
         self.assertTrue('Invalid disk format' in res.body, res.body)
 
     def test_create_with_location_no_container_format(self):
-        fixture_headers = {'x-image-meta-store': 'bad',
-                   'x-image-meta-name': 'bogus',
-                   'x-image-meta-location': 'http://localhost:0/image.tar.gz',
-                   'x-image-meta-disk-format': 'vhd'}
+        fixture_headers = {
+            'x-image-meta-store': 'bad',
+            'x-image-meta-name': 'bogus',
+            'x-image-meta-location': 'http://localhost:0/image.tar.gz',
+            'x-image-meta-disk-format': 'vhd',
+        }
 
         req = webob.Request.blank("/images")
         req.method = 'POST'
@@ -1985,11 +2035,13 @@ class TestGlanceAPI(base.IsolatedUnitTest):
         self.assertTrue('Invalid container format' in res.body)
 
     def test_bad_container_format(self):
-        fixture_headers = {'x-image-meta-store': 'bad',
-                   'x-image-meta-name': 'bogus',
-                   'x-image-meta-location': 'http://localhost:0/image.tar.gz',
-                   'x-image-meta-disk-format': 'vhd',
-                   'x-image-meta-container-format': 'invalid'}
+        fixture_headers = {
+            'x-image-meta-store': 'bad',
+            'x-image-meta-name': 'bogus',
+            'x-image-meta-location': 'http://localhost:0/image.tar.gz',
+            'x-image-meta-disk-format': 'vhd',
+            'x-image-meta-container-format': 'invalid',
+        }
 
         req = webob.Request.blank("/images")
         req.method = 'POST'
@@ -2001,12 +2053,14 @@ class TestGlanceAPI(base.IsolatedUnitTest):
         self.assertTrue('Invalid container format' in res.body)
 
     def test_bad_image_size(self):
-        fixture_headers = {'x-image-meta-store': 'bad',
-                   'x-image-meta-name': 'bogus',
-                   'x-image-meta-location': 'http://example.com/image.tar.gz',
-                   'x-image-meta-disk-format': 'vhd',
-                   'x-image-meta-size': 'invalid',
-                   'x-image-meta-container-format': 'bare'}
+        fixture_headers = {
+            'x-image-meta-store': 'bad',
+            'x-image-meta-name': 'bogus',
+            'x-image-meta-location': 'http://example.com/image.tar.gz',
+            'x-image-meta-disk-format': 'vhd',
+            'x-image-meta-size': 'invalid',
+            'x-image-meta-container-format': 'bare',
+        }
 
         req = webob.Request.blank("/images")
         req.method = 'POST'
@@ -2018,11 +2072,13 @@ class TestGlanceAPI(base.IsolatedUnitTest):
         self.assertTrue('Incoming image size' in res.body)
 
     def test_bad_image_name(self):
-        fixture_headers = {'x-image-meta-store': 'bad',
-                   'x-image-meta-name': 'X' * 256,
-                   'x-image-meta-location': 'http://example.com/image.tar.gz',
-                   'x-image-meta-disk-format': 'vhd',
-                   'x-image-meta-container-format': 'bare'}
+        fixture_headers = {
+            'x-image-meta-store': 'bad',
+            'x-image-meta-name': 'X' * 256,
+            'x-image-meta-location': 'http://example.com/image.tar.gz',
+            'x-image-meta-disk-format': 'vhd',
+            'x-image-meta-container-format': 'bare',
+        }
 
         req = webob.Request.blank("/images")
         req.method = 'POST'
@@ -2227,7 +2283,7 @@ class TestGlanceAPI(base.IsolatedUnitTest):
         self.assertEquals(res.status_int, httplib.BAD_REQUEST)
 
     def test_add_image_unauthorized(self):
-        rules = {"add_image": [["false:false"]]}
+        rules = {"add_image": '!'}
         self.set_policy_rules(rules)
         fixture_headers = {'x-image-meta-store': 'file',
                            'x-image-meta-disk-format': 'vhd',
@@ -2245,7 +2301,7 @@ class TestGlanceAPI(base.IsolatedUnitTest):
         self.assertEquals(res.status_int, 403)
 
     def test_add_public_image_unauthorized(self):
-        rules = {"add_image": [], "publicize_image": [["false:false"]]}
+        rules = {"add_image": '@', "publicize_image": '!'}
         self.set_policy_rules(rules)
         fixture_headers = {'x-image-meta-store': 'file',
                            'x-image-meta-is-public': 'true',
@@ -2330,6 +2386,36 @@ class TestGlanceAPI(base.IsolatedUnitTest):
     def test_put_image_content_missing_container_type(self):
         """Tests delayed activation of image with missing container format"""
         self._do_test_put_image_content_missing_format('container_format')
+
+    def test_update_deleted_image(self):
+        """Tests that exception raised trying to update a deleted image"""
+        req = webob.Request.blank("/images/%s" % UUID2)
+        req.method = 'DELETE'
+        res = req.get_response(self.api)
+        self.assertEquals(res.status_int, 200)
+
+        fixture = {'name': 'test_del_img'}
+        req = webob.Request.blank('/images/%s' % UUID2)
+        req.method = 'PUT'
+        req.content_type = 'application/json'
+        req.body = json.dumps(dict(image=fixture))
+
+        res = req.get_response(self.api)
+        self.assertEquals(res.status_int, webob.exc.HTTPForbidden.code)
+        self.assertTrue('Forbidden to update deleted image' in res.body)
+
+    def test_delete_deleted_image(self):
+        """Tests that exception raised trying to delete a deleted image"""
+        req = webob.Request.blank("/images/%s" % UUID2)
+        req.method = 'DELETE'
+        res = req.get_response(self.api)
+        self.assertEquals(res.status_int, 200)
+
+        req = webob.Request.blank("/images/%s" % UUID2)
+        req.method = 'DELETE'
+        res = req.get_response(self.api)
+        self.assertEquals(res.status_int, webob.exc.HTTPForbidden.code)
+        self.assertTrue('Forbidden to delete a deleted image' in res.body)
 
     def test_register_and_upload(self):
         """
@@ -2474,7 +2560,7 @@ class TestGlanceAPI(base.IsolatedUnitTest):
 
     def test_publicize_image_unauthorized(self):
         """Create a non-public image then fail to make public"""
-        rules = {"add_image": [], "publicize_image": [["false:false"]]}
+        rules = {"add_image": '@', "publicize_image": '!'}
         self.set_policy_rules(rules)
 
         fixture_headers = {'x-image-meta-store': 'file',
@@ -2703,14 +2789,14 @@ class TestGlanceAPI(base.IsolatedUnitTest):
         self.assertEquals(res.status_int, 400)
 
     def test_get_images_detailed_unauthorized(self):
-        rules = {"get_images": [["false:false"]]}
+        rules = {"get_images": '!'}
         self.set_policy_rules(rules)
         req = webob.Request.blank('/images/detail')
         res = req.get_response(self.api)
         self.assertEquals(res.status_int, 403)
 
     def test_get_images_unauthorized(self):
-        rules = {"get_images": [["false:false"]]}
+        rules = {"get_images": '!'}
         self.set_policy_rules(rules)
         req = webob.Request.blank('/images/detail')
         res = req.get_response(self.api)
@@ -2871,7 +2957,7 @@ class TestGlanceAPI(base.IsolatedUnitTest):
             self.assertEquals(value, res.headers[key])
 
     def test_image_meta_unauthorized(self):
-        rules = {"get_image": [["false:false"]]}
+        rules = {"get_image": '!'}
         self.set_policy_rules(rules)
         req = webob.Request.blank("/images/%s" % UUID2)
         req.method = 'HEAD'
@@ -2891,14 +2977,14 @@ class TestGlanceAPI(base.IsolatedUnitTest):
         self.assertEquals(res.status_int, webob.exc.HTTPNotFound.code)
 
     def test_show_image_unauthorized(self):
-        rules = {"get_image": [["false:false"]]}
+        rules = {"get_image": '!'}
         self.set_policy_rules(rules)
         req = webob.Request.blank("/images/%s" % UUID2)
         res = req.get_response(self.api)
         self.assertEqual(res.status_int, 403)
 
     def test_show_image_unauthorized_download(self):
-        rules = {"download_image": [["false:false"]]}
+        rules = {"download_image": '!'}
         self.set_policy_rules(rules)
         req = webob.Request.blank("/images/%s" % UUID2)
         res = req.get_response(self.api)
@@ -3026,7 +3112,7 @@ class TestGlanceAPI(base.IsolatedUnitTest):
         self.assertEquals(res.status_int, httplib.FORBIDDEN)
 
     def test_delete_image_unauthorized(self):
-        rules = {"delete_image": [["false:false"]]}
+        rules = {"delete_image": '!'}
         self.set_policy_rules(rules)
         req = webob.Request.blank("/images/%s" % UUID2)
         req.method = 'DELETE'
@@ -3087,7 +3173,7 @@ class TestGlanceAPI(base.IsolatedUnitTest):
         Tests replacing image members raises right exception
         """
         self.api = test_utils.FakeAuthMiddleware(router.API(self.mapper),
-                                                     is_admin=False)
+                                                 is_admin=False)
         fixture = dict(member_id='pattieblack')
 
         req = webob.Request.blank('/images/%s/members' % UUID2)
@@ -3103,7 +3189,7 @@ class TestGlanceAPI(base.IsolatedUnitTest):
         Tests adding image members raises right exception
         """
         self.api = test_utils.FakeAuthMiddleware(router.API(self.mapper),
-                                                     is_admin=False)
+                                                 is_admin=False)
         req = webob.Request.blank('/images/%s/members/pattieblack' % UUID2)
         req.method = 'PUT'
 
@@ -3115,7 +3201,7 @@ class TestGlanceAPI(base.IsolatedUnitTest):
         Tests deleting image members raises right exception
         """
         self.api = test_utils.FakeAuthMiddleware(router.API(self.mapper),
-                                                     is_admin=False)
+                                                 is_admin=False)
         req = webob.Request.blank('/images/%s/members/pattieblack' % UUID2)
         req.method = 'DELETE'
 
@@ -3140,24 +3226,25 @@ class TestImageSerializer(base.IsolatedUnitTest):
                 yield x
 
         self.FIXTURE = {
-             'image_iterator': image_iter(),
-             'image_meta': {
-                 'id': UUID2,
-                 'name': 'fake image #2',
-                 'status': 'active',
-                 'disk_format': 'vhd',
-                 'container_format': 'ovf',
-                 'is_public': True,
-                 'created_at': timeutils.utcnow(),
-                 'updated_at': timeutils.utcnow(),
-                 'deleted_at': None,
-                 'deleted': False,
-                 'checksum': '06ff575a2856444fbe93100157ed74ab92eb7eff',
-                 'size': 19,
-                 'owner': _gen_uuid(),
-                 'location': "file:///tmp/glance-tests/2",
-                 'properties': {}}
-             }
+            'image_iterator': image_iter(),
+            'image_meta': {
+                'id': UUID2,
+                'name': 'fake image #2',
+                'status': 'active',
+                'disk_format': 'vhd',
+                'container_format': 'ovf',
+                'is_public': True,
+                'created_at': timeutils.utcnow(),
+                'updated_at': timeutils.utcnow(),
+                'deleted_at': None,
+                'deleted': False,
+                'checksum': '06ff575a2856444fbe93100157ed74ab92eb7eff',
+                'size': 19,
+                'owner': _gen_uuid(),
+                'location': "file:///tmp/glance-tests/2",
+                'properties': {},
+            }
+        }
 
     def test_meta(self):
         exp_headers = {'x-image-meta-id': UUID2,
@@ -3178,27 +3265,27 @@ class TestImageSerializer(base.IsolatedUnitTest):
         # metadata will actually be unicode when handled internally. But we
         # want to output utf-8.
         FIXTURE = {
-             'image_meta': {
-                 'id': unicode(UUID2),
-                 'name': u'fake image #2 with utf-8 éàè',
-                 'status': u'active',
-                 'disk_format': u'vhd',
-                 'container_format': u'ovf',
-                 'is_public': True,
-                 'created_at': timeutils.utcnow(),
-                 'updated_at': timeutils.utcnow(),
-                 'deleted_at': None,
-                 'deleted': False,
-                 'checksum': u'06ff575a2856444fbe93100157ed74ab92eb7eff',
-                 'size': 19,
-                 'owner': unicode(_gen_uuid()),
-                 'location': u"file:///tmp/glance-tests/2",
-                 'properties': {
-                     u'prop_éé': u'ça marche',
-                     u'prop_çé': u'çé',
-                     }
-                 }
-             }
+            'image_meta': {
+                'id': unicode(UUID2),
+                'name': u'fake image #2 with utf-8 éàè',
+                'status': u'active',
+                'disk_format': u'vhd',
+                'container_format': u'ovf',
+                'is_public': True,
+                'created_at': timeutils.utcnow(),
+                'updated_at': timeutils.utcnow(),
+                'deleted_at': None,
+                'deleted': False,
+                'checksum': u'06ff575a2856444fbe93100157ed74ab92eb7eff',
+                'size': 19,
+                'owner': unicode(_gen_uuid()),
+                'location': u"file:///tmp/glance-tests/2",
+                'properties': {
+                    u'prop_éé': u'ça marche',
+                    u'prop_çé': u'çé',
+                }
+            }
+        }
         exp_headers = {'x-image-meta-id': UUID2.encode('utf-8'),
                        'x-image-meta-location': 'file:///tmp/glance-tests/2',
                        'ETag': '06ff575a2856444fbe93100157ed74ab92eb7eff',
@@ -3269,7 +3356,7 @@ class TestImageSerializer(base.IsolatedUnitTest):
             'receiver_tenant_id': self.receiving_tenant,
             'receiver_user_id': self.receiving_user,
             'destination_ip': '1.2.3.4',
-            }
+        }
 
         def fake_info(_event_type, _payload):
             self.assertEqual(_payload, expected_payload)
@@ -3298,7 +3385,7 @@ class TestImageSerializer(base.IsolatedUnitTest):
             'receiver_tenant_id': self.receiving_tenant,
             'receiver_user_id': self.receiving_user,
             'destination_ip': '1.2.3.4',
-            }
+        }
 
         def fake_error(_event_type, _payload):
             self.assertEqual(_payload, expected_payload)

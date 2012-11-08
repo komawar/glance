@@ -29,8 +29,7 @@ from webob.exc import (HTTPError,
                        HTTPBadRequest,
                        HTTPForbidden,
                        HTTPRequestEntityTooLarge,
-                       HTTPServiceUnavailable,
-                      )
+                       HTTPServiceUnavailable)
 
 from glance.api import common
 from glance.api import policy
@@ -59,7 +58,7 @@ SUPPORTED_PARAMS = glance.api.v1.SUPPORTED_PARAMS
 SUPPORTED_FILTERS = glance.api.v1.SUPPORTED_FILTERS
 CONTAINER_FORMATS = ['ami', 'ari', 'aki', 'bare', 'ovf']
 DISK_FORMATS = ['ami', 'ari', 'aki', 'vhd', 'vmdk', 'raw', 'qcow2', 'vdi',
-               'iso']
+                'iso']
 
 
 # Defined at module level due to _is_opt_registered
@@ -362,8 +361,8 @@ class Controller(controller.BaseController):
             image_meta = registry.add_image_metadata(req.context, image_meta)
             return image_meta
         except exception.Duplicate:
-            msg = (_("An image with identifier %s already exists")
-                  % image_meta['id'])
+            msg = (_("An image with identifier %s already exists") %
+                   image_meta['id'])
             LOG.error(msg)
             raise HTTPConflict(explanation=msg,
                                request=req,
@@ -441,9 +440,9 @@ class Controller(controller.BaseController):
             supplied_checksum = image_meta.get('checksum')
             if supplied_checksum and supplied_checksum != checksum:
                 msg = _("Supplied checksum (%(supplied_checksum)s) and "
-                       "checksum generated from uploaded image "
-                       "(%(checksum)s) did not match. Setting image "
-                       "status to 'killed'.") % locals()
+                        "checksum generated from uploaded image "
+                        "(%(checksum)s) did not match. Setting image "
+                        "status to 'killed'.") % locals()
                 LOG.error(msg)
                 self._safe_kill(req, image_id)
                 raise HTTPBadRequest(explanation=msg,
@@ -468,14 +467,12 @@ class Controller(controller.BaseController):
             msg = _("Attempt to upload duplicate image: %s") % e
             LOG.error(msg)
             self._safe_kill(req, image_id)
-            self.notifier.error('image.upload', msg)
             raise HTTPConflict(explanation=msg, request=req)
 
         except exception.Forbidden, e:
             msg = _("Forbidden upload attempt: %s") % e
             LOG.error(msg)
             self._safe_kill(req, image_id)
-            self.notifier.error('image.upload', msg)
             raise HTTPForbidden(explanation=msg,
                                 request=req,
                                 content_type="text/plain")
@@ -504,7 +501,6 @@ class Controller(controller.BaseController):
 
         except HTTPError, e:
             self._safe_kill(req, image_id)
-            self.notifier.error('image.upload', e.explanation)
             #NOTE(bcwaldon): Ideally, we would just call 'raise' here,
             # but something in the above function calls is affecting the
             # exception context and we must explicitly re-raise the
@@ -519,9 +515,8 @@ class Controller(controller.BaseController):
 
             msg = _("Error uploading image: (%(class_name)s): "
                     "%(exc)s") % ({'class_name': e.__class__.__name__,
-                    'exc': str(e)})
+                                   'exc': str(e)})
 
-            self.notifier.error('image.upload', msg)
             raise HTTPBadRequest(explanation=msg, request=req)
 
     def _activate(self, req, image_id, location):
@@ -539,8 +534,8 @@ class Controller(controller.BaseController):
 
         try:
             image_meta_data = registry.update_image_metadata(req.context,
-                                                  image_id,
-                                                  image_meta)
+                                                             image_id,
+                                                             image_meta)
             self.notifier.info("image.update", image_meta_data)
             return image_meta_data
         except exception.Invalid, e:
@@ -548,7 +543,6 @@ class Controller(controller.BaseController):
                    % locals())
             for line in msg.split('\n'):
                 LOG.error(line)
-            self.notifier.error('image.update', msg)
             raise HTTPBadRequest(explanation=msg,
                                  request=req,
                                  content_type="text/plain")
@@ -578,7 +572,7 @@ class Controller(controller.BaseController):
         except Exception, e:
             LOG.error(_("Unable to kill image %(id)s: "
                         "%(exc)s") % ({'id': image_id,
-                        'exc': repr(e)}))
+                                       'exc': repr(e)}))
 
     def _upload_and_activate(self, req, image_meta):
         """
@@ -606,8 +600,9 @@ class Controller(controller.BaseController):
 
     def _handle_source(self, req, image_id, image_meta, image_data):
         if image_data:
-            image_meta = self._validate_image_for_activation(req, image_id,
-                                                        image_meta)
+            image_meta = self._validate_image_for_activation(req,
+                                                             image_id,
+                                                             image_meta)
             image_meta = self._upload_and_activate(req, image_meta)
         elif self._copy_from(req):
             msg = _('Triggering asynchronous copy from external source')
@@ -714,6 +709,14 @@ class Controller(controller.BaseController):
         orig_image_meta = self.get_image_meta_or_404(req, id)
         orig_status = orig_image_meta['status']
 
+        # Do not allow any updates on a deleted image.
+        # Fix for LP Bug #1060930
+        if orig_status == 'deleted':
+            msg = _("Forbidden to update deleted image.")
+            raise HTTPForbidden(explanation=msg,
+                                request=req,
+                                content_type="text/plain")
+
         # The default behaviour for a PUT /images/<IMAGE_ID> is to
         # override any properties that were previously set. This, however,
         # leads to a number of issues for the common use case where a caller
@@ -769,7 +772,6 @@ class Controller(controller.BaseController):
                    % locals())
             for line in msg.split('\n'):
                 LOG.error(line)
-            self.notifier.error('image.update', msg)
             raise HTTPBadRequest(explanation=msg,
                                  request=req,
                                  content_type="text/plain")
@@ -777,7 +779,6 @@ class Controller(controller.BaseController):
             msg = ("Failed to find image to update: %(e)s" % locals())
             for line in msg.split('\n'):
                 LOG.info(line)
-            self.notifier.info('image.update', msg)
             raise HTTPNotFound(explanation=msg,
                                request=req,
                                content_type="text/plain")
@@ -785,7 +786,6 @@ class Controller(controller.BaseController):
             msg = ("Forbidden to update image: %(e)s" % locals())
             for line in msg.split('\n'):
                 LOG.info(line)
-            self.notifier.info('image.update', msg)
             raise HTTPForbidden(explanation=msg,
                                 request=req,
                                 content_type="text/plain")
@@ -821,6 +821,12 @@ class Controller(controller.BaseController):
                                 request=req,
                                 content_type="text/plain")
 
+        if image['status'] == 'deleted':
+            msg = _("Forbidden to delete a deleted image.")
+            LOG.debug(msg)
+            raise HTTPForbidden(explanation=msg, request=req,
+                                content_type="text/plain")
+
         status = 'deleted'
         try:
             # The image's location field may be None in the case
@@ -841,7 +847,6 @@ class Controller(controller.BaseController):
             msg = ("Failed to find image to delete: %(e)s" % locals())
             for line in msg.split('\n'):
                 LOG.info(line)
-            self.notifier.info('image.delete', msg)
             raise HTTPNotFound(explanation=msg,
                                request=req,
                                content_type="text/plain")
@@ -849,7 +854,6 @@ class Controller(controller.BaseController):
             msg = ("Forbidden to delete image: %(e)s" % locals())
             for line in msg.split('\n'):
                 LOG.info(line)
-            self.notifier.info('image.delete', msg)
             raise HTTPForbidden(explanation=msg,
                                 request=req,
                                 content_type="text/plain")

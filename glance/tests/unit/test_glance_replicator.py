@@ -20,6 +20,7 @@ import json
 import os
 import StringIO
 import sys
+import UserDict
 
 from glance.tests import utils as test_utils
 
@@ -37,36 +38,33 @@ glance_replicator = imp.load_source('glance_replicator',
 sys.dont_write_bytecode = False
 
 
-IMG_RESPONSE_ACTIVE = {'content-length': '0',
-                       'property-image_state': 'available',
-                       'min_ram': '0',
-                       'disk_format': 'aki',
-                       'updated_at': '2012-06-25T02:10:36',
-                       'date': 'Thu, 28 Jun 2012 07:20:05 GMT',
-                       'owner': '8aef75b5c0074a59aa99188fdb4b9e90',
-                       'id': '6d55dd55-053a-4765-b7bc-b30df0ea3861',
-                       'size': '4660272',
-                       'property-image_location':
-                           ('ubuntu-bucket/oneiric-server-cloudimg-amd64-'
-                            'vmlinuz-generic.manifest.xml'),
-                       'property-architecture': 'x86_64',
-                       'etag': 'f46cfe7fb3acaff49a3567031b9b53bb',
-                       'location':
-                           ('http://127.0.0.1:9292/v1/images/'
-                            '6d55dd55-053a-4765-b7bc-b30df0ea3861'),
-                       'container_format': 'aki',
-                       'status': 'active',
-                       'deleted': 'False',
-                       'min_disk': '0',
-                       'is_public': 'False',
-                       'name':
-                           ('ubuntu-bucket/oneiric-server-cloudimg-amd64-'
-                            'vmlinuz-generic'),
-                       'checksum': 'f46cfe7fb3acaff49a3567031b9b53bb',
-                       'created_at': '2012-06-25T02:10:32',
-                       'protected': 'False',
-                       'content-type': 'text/html; charset=UTF-8'
-                       }
+IMG_RESPONSE_ACTIVE = {
+    'content-length': '0',
+    'property-image_state': 'available',
+    'min_ram': '0',
+    'disk_format': 'aki',
+    'updated_at': '2012-06-25T02:10:36',
+    'date': 'Thu, 28 Jun 2012 07:20:05 GMT',
+    'owner': '8aef75b5c0074a59aa99188fdb4b9e90',
+    'id': '6d55dd55-053a-4765-b7bc-b30df0ea3861',
+    'size': '4660272',
+    'property-image_location': 'ubuntu-bucket/oneiric-server-cloudimg-amd64-'
+                               'vmlinuz-generic.manifest.xml',
+    'property-architecture': 'x86_64',
+    'etag': 'f46cfe7fb3acaff49a3567031b9b53bb',
+    'location': 'http://127.0.0.1:9292/v1/images/'
+                '6d55dd55-053a-4765-b7bc-b30df0ea3861',
+    'container_format': 'aki',
+    'status': 'active',
+    'deleted': 'False',
+    'min_disk': '0',
+    'is_public': 'False',
+    'name': 'ubuntu-bucket/oneiric-server-cloudimg-amd64-vmlinuz-generic',
+    'checksum': 'f46cfe7fb3acaff49a3567031b9b53bb',
+    'created_at': '2012-06-25T02:10:32',
+    'protected': 'False',
+    'content-type': 'text/html; charset=UTF-8'
+}
 
 IMG_RESPONSE_QUEUED = copy.copy(IMG_RESPONSE_ACTIVE)
 IMG_RESPONSE_QUEUED['status'] = 'queued'
@@ -84,7 +82,7 @@ class FakeHTTPConnection(object):
         self.port = 9292
 
     def prime_request(self, method, url, in_body, in_headers,
-                      out_body, out_headers):
+                      out_code, out_body, out_headers):
         if not url.startswith('/'):
             url = '/' + url
 
@@ -96,7 +94,7 @@ class FakeHTTPConnection(object):
         for key in out_headers:
             flat_headers.append((key, out_headers[key]))
 
-        self.reqs[hashable] = (out_body, flat_headers)
+        self.reqs[hashable] = (out_code, out_body, flat_headers)
 
     def request(self, method, url, body, headers):
         self.count += 1
@@ -119,10 +117,10 @@ class FakeHTTPConnection(object):
 
     def getresponse(self):
         class FakeResponse(object):
-            def __init__(self, (body, headers)):
+            def __init__(self, (code, body, headers)):
                 self.body = StringIO.StringIO(body)
                 self.headers = headers
-                self.status = 200
+                self.status = code
 
             def read(self, count=1000000):
                 return self.body.read(count)
@@ -134,6 +132,19 @@ class FakeHTTPConnection(object):
 
 
 class ImageServiceTestCase(test_utils.BaseTestCase):
+    def test_rest_errors(self):
+        c = glance_replicator.ImageService(FakeHTTPConnection(), 'noauth')
+
+        for code, exc in [(400, glance_replicator.ServerErrorException),
+                          (401, glance_replicator.AuthenticationException),
+                          (403, glance_replicator.AuthenticationException),
+                          (409,
+                           glance_replicator.ImageAlreadyPresentException),
+                          (500, glance_replicator.ServerErrorException)]:
+            c.conn.prime_request('GET', 'v1/images/123', '',
+                                 {'x-auth-token': 'noauth'}, code, '', {})
+            self.assertRaises(exc, c.get_image, '123')
+
     def test_rest_get_images(self):
         c = glance_replicator.ImageService(FakeHTTPConnection(), 'noauth')
 
@@ -141,12 +152,12 @@ class ImageServiceTestCase(test_utils.BaseTestCase):
         resp = {'images': [IMG_RESPONSE_ACTIVE, IMG_RESPONSE_QUEUED]}
         c.conn.prime_request('GET', 'v1/images/detail?is_public=None', '',
                              {'x-auth-token': 'noauth'},
-                             json.dumps(resp), {})
+                             200, json.dumps(resp), {})
         c.conn.prime_request('GET',
                              ('v1/images/detail?marker=%s&is_public=None'
                               % IMG_RESPONSE_QUEUED['id']),
                              '', {'x-auth-token': 'noauth'},
-                             json.dumps({'images': []}), {})
+                             200, json.dumps({'images': []}), {})
 
         imgs = list(c.get_images())
         self.assertEquals(len(imgs), 2)
@@ -159,16 +170,22 @@ class ImageServiceTestCase(test_utils.BaseTestCase):
         c.conn.prime_request('GET',
                              'v1/images/%s' % IMG_RESPONSE_ACTIVE['id'],
                              '', {'x-auth-token': 'noauth'},
-                             image_contents, IMG_RESPONSE_ACTIVE)
+                             200, image_contents, IMG_RESPONSE_ACTIVE)
 
         body = c.get_image(IMG_RESPONSE_ACTIVE['id'])
         self.assertEquals(body.read(), image_contents)
 
     def test_rest_header_list_to_dict(self):
-        i = [('x-image-meta-banana', 42), ('gerkin', 12)]
+        i = [('x-image-meta-banana', 42),
+             ('gerkin', 12),
+             ('x-image-meta-property-frog', 11),
+             ('x-image-meta-property-duck', 12)]
         o = glance_replicator.ImageService._header_list_to_dict(i)
         self.assertTrue('banana' in o)
         self.assertTrue('gerkin' in o)
+        self.assertTrue('properties' in o)
+        self.assertTrue('frog' in o['properties'])
+        self.assertTrue('duck' in o['properties'])
         self.assertFalse('x-image-meta-banana' in o)
 
     def test_rest_get_image_meta(self):
@@ -177,17 +194,21 @@ class ImageServiceTestCase(test_utils.BaseTestCase):
         c.conn.prime_request('HEAD',
                              'v1/images/%s' % IMG_RESPONSE_ACTIVE['id'],
                              '', {'x-auth-token': 'noauth'},
-                             '', IMG_RESPONSE_ACTIVE)
+                             200, '', IMG_RESPONSE_ACTIVE)
 
         header = c.get_image_meta(IMG_RESPONSE_ACTIVE['id'])
         self.assertTrue('id' in header)
 
     def test_rest_dict_to_headers(self):
         i = {'banana': 42,
-             'gerkin': 12}
+             'gerkin': 12,
+             'properties': {'frog': 1}
+             }
         o = glance_replicator.ImageService._dict_to_headers(i)
         self.assertTrue('x-image-meta-banana' in o)
         self.assertTrue('x-image-meta-gerkin' in o)
+        self.assertTrue('x-image-meta-property-frog' in o)
+        self.assertFalse('properties' in o)
 
     def test_rest_add_image(self):
         c = glance_replicator.ImageService(FakeHTTPConnection(), 'noauth')
@@ -204,8 +225,50 @@ class ImageServiceTestCase(test_utils.BaseTestCase):
 
         c.conn.prime_request('POST', 'v1/images',
                              image_body, image_meta_with_proto,
-                             '', IMG_RESPONSE_ACTIVE)
+                             200, '', IMG_RESPONSE_ACTIVE)
 
         headers, body = c.add_image(IMG_RESPONSE_ACTIVE, image_body)
         self.assertEquals(headers, IMG_RESPONSE_ACTIVE)
         self.assertEquals(c.conn.count, 1)
+
+    def test_rest_add_image_meta(self):
+        c = glance_replicator.ImageService(FakeHTTPConnection(), 'noauth')
+
+        image_meta = {'id': 123}
+        image_meta_headers = \
+            glance_replicator.ImageService._dict_to_headers(image_meta)
+        image_meta_headers['x-auth-token'] = 'noauth'
+        image_meta_headers['Content-Type'] = 'application/octet-stream'
+        c.conn.prime_request('PUT', 'v1/images/%s' % image_meta['id'],
+                             '', image_meta_headers, 200, '', '')
+        headers, body = c.add_image_meta(image_meta)
+
+
+class FakeImageService(object):
+    def __init__(self, http_conn, authtoken):
+        pass
+
+    def get_images(self):
+        return [{'status': 'active', 'size': 100, 'id': 123},
+                {'status': 'deleted', 'size': 200, 'id': 456},
+                {'status': 'active', 'size': 300, 'id': 789}]
+
+
+class ReplicationCommandsTestCase(test_utils.BaseTestCase):
+    def test_replication_size(self):
+        options = UserDict.UserDict()
+        options.slavetoken = 'slavetoken'
+        args = ['localhost:9292']
+
+        stdout = sys.stdout
+        sys.stdout = StringIO.StringIO()
+        try:
+            glance_replicator.replication_size(options, args,
+                                               imageservice=FakeImageService)
+            sys.stdout.seek(0)
+            output = sys.stdout.read()
+        finally:
+            sys.stdout = stdout
+
+        output = output.rstrip()
+        self.assertEqual(output, 'Total size is 400 bytes across 2 images')

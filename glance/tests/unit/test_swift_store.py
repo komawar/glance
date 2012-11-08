@@ -59,9 +59,12 @@ SWIFT_CONF = {'verbose': True,
 def stub_out_swiftclient(stubs, swift_store_auth_version):
     fixture_containers = ['glance']
     fixture_container_headers = {}
-    fixture_headers = {'glance/%s' % FAKE_UUID:
-                {'content-length': FIVE_KB,
-                 'etag': 'c2e5db72bd7fd153f53ede5da5a06de3'}}
+    fixture_headers = {
+        'glance/%s' % FAKE_UUID: {
+            'content-length': FIVE_KB,
+            'etag': 'c2e5db72bd7fd153f53ede5da5a06de3'
+        }
+    }
     fixture_objects = {'glance/%s' % FAKE_UUID:
                        StringIO.StringIO("*" * FIVE_KB)}
 
@@ -69,7 +72,7 @@ def stub_out_swiftclient(stubs, swift_store_auth_version):
         if container not in fixture_containers:
             msg = "No container %s found" % container
             raise swiftclient.ClientException(msg,
-                        http_status=httplib.NOT_FOUND)
+                                              http_status=httplib.NOT_FOUND)
         return fixture_container_headers
 
     def fake_put_container(url, token, container, **kwargs):
@@ -106,7 +109,7 @@ def stub_out_swiftclient(stubs, swift_store_auth_version):
             read_len = fixture_object.len
             if read_len > MAX_SWIFT_OBJECT_SIZE:
                 msg = ('Image size:%d exceeds Swift max:%d' %
-                        (read_len, MAX_SWIFT_OBJECT_SIZE))
+                       (read_len, MAX_SWIFT_OBJECT_SIZE))
                 raise swiftclient.ClientException(
                         msg, http_status=httplib.REQUEST_ENTITY_TOO_LARGE)
             fixture_objects[fixture_key] = fixture_object
@@ -118,7 +121,7 @@ def stub_out_swiftclient(stubs, swift_store_auth_version):
             msg = ("Object PUT failed - Object with key %s already exists"
                    % fixture_key)
             raise swiftclient.ClientException(msg,
-                        http_status=httplib.CONFLICT)
+                                              http_status=httplib.CONFLICT)
 
     def fake_get_object(url, token, container, name, **kwargs):
         # GET returns the tuple (list of headers, file object)
@@ -126,7 +129,7 @@ def stub_out_swiftclient(stubs, swift_store_auth_version):
         if not fixture_key in fixture_headers:
             msg = "Object GET failed"
             raise swiftclient.ClientException(msg,
-                        http_status=httplib.NOT_FOUND)
+                                              http_status=httplib.NOT_FOUND)
 
         fixture = fixture_headers[fixture_key]
         if 'manifest' in fixture:
@@ -151,7 +154,7 @@ def stub_out_swiftclient(stubs, swift_store_auth_version):
         except KeyError:
             msg = "Object HEAD failed - Object does not exist"
             raise swiftclient.ClientException(msg,
-                        http_status=httplib.NOT_FOUND)
+                                              http_status=httplib.NOT_FOUND)
 
     def fake_delete_object(url, token, container, name, **kwargs):
         # DELETE returns nothing
@@ -159,7 +162,7 @@ def stub_out_swiftclient(stubs, swift_store_auth_version):
         if fixture_key not in fixture_headers.keys():
             msg = "Object DELETE failed - Object does not exist"
             raise swiftclient.ClientException(msg,
-                        http_status=httplib.NOT_FOUND)
+                                              http_status=httplib.NOT_FOUND)
         else:
             del fixture_headers[fixture_key]
             del fixture_objects[fixture_key]
@@ -236,8 +239,8 @@ class SwiftTests(object):
         http:// in the swift_store_auth_address config value
         """
         loc = get_location_from_uri("swift+http://%s:key@auth_address/"
-                                    "glance/%s" % (
-                self.swift_store_user, FAKE_UUID))
+                                    "glance/%s" %
+                                    (self.swift_store_user, FAKE_UUID))
         (image_swift, image_size) = self.store.get(loc)
         self.assertEqual(image_size, 5120)
 
@@ -323,7 +326,7 @@ class SwiftTests(object):
             expected_swift_size = FIVE_KB
             expected_swift_contents = "*" * expected_swift_size
             expected_checksum = \
-                    hashlib.md5(expected_swift_contents).hexdigest()
+                hashlib.md5(expected_swift_contents).hexdigest()
 
             image_swift = StringIO.StringIO(expected_swift_contents)
 
@@ -638,8 +641,7 @@ class TestStoreAuthV1(base.StoreClearingUnitTest, SwiftTests):
         self.config(**conf)
         super(TestStoreAuthV1, self).setUp()
         self.stubs = stubout.StubOutForTesting()
-        stub_out_swiftclient(self.stubs,
-                                     conf['swift_store_auth_version'])
+        stub_out_swiftclient(self.stubs, conf['swift_store_auth_version'])
         self.store = Store()
 
     def tearDown(self):

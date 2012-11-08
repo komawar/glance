@@ -13,11 +13,12 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+import copy
 import datetime
 import functools
-import uuid
 
 from glance.common import exception
+from glance.common import utils
 import glance.openstack.common.log as logging
 from glance.openstack.common import timeutils
 
@@ -71,11 +72,10 @@ def _image_property_format(image_id, name, value):
 
 def _image_member_format(image_id, tenant_id, can_share):
     return {
+        'id': utils.generate_uuid(),
         'image_id': image_id,
         'member': tenant_id,
         'can_share': can_share,
-        'deleted': False,
-        'deleted_at': None,
     }
 
 
@@ -119,9 +119,15 @@ def _filter_images(images, filters, context):
         prop_filter = filters.pop('properties')
         filters.update(prop_filter)
 
-    is_public_filter = filters.pop('is_public', None)
+    if 'is_public' in filters and filters['is_public'] is None:
+        filters.pop('is_public')
 
     for i, image in enumerate(images):
+        has_ownership = context.owner and image['owner'] == context.owner
+        can_see = image['is_public'] or has_ownership or context.is_admin
+        if not can_see:
+            continue
+
         add = True
         for k, value in filters.iteritems():
             key = k
@@ -144,29 +150,13 @@ def _filter_images(images, filters, context):
                 for p in image['properties']:
                     properties = {p['name']: p['value'],
                                   'deleted': p['deleted']}
-                add = properties.get(key) == value and \
-                                             properties.get('deleted') is False
+                add = (properties.get(key) == value and
+                       properties.get('deleted') is False)
             if not add:
                 break
 
         if add:
             filtered_images.append(image)
-
-    #NOTE(bcwaldon): This hacky code is only here to match what the
-    # sqlalchemy driver wants - refactor it out of the db layer when
-    # it seems appropriate
-    if is_public_filter is not None:
-        def _filter_ownership(image):
-            has_ownership = image['owner'] == context.owner
-            can_see = image['is_public'] or has_ownership or context.is_admin
-
-            if can_see:
-                return has_ownership or \
-                        (can_see and image['is_public'] == is_public_filter)
-            else:
-                return False
-
-        filtered_images = filter(_filter_ownership, filtered_images)
 
     return filtered_images
 
@@ -239,8 +229,9 @@ def image_get_all(context, filters=None, marker=None, limit=None,
 @log_call
 def image_property_create(context, values):
     image = image_get(context, values['image_id'])
-    prop = _image_property_format(values['image_id'], values['name'],
-                values['value'])
+    prop = _image_property_format(values['image_id'],
+                                  values['name'],
+                                  values['value'])
     image['properties'].append(prop)
     return prop
 
@@ -270,7 +261,7 @@ def image_member_find(context, image_id=None, member=None):
     members = DATA['members']
     for f in filters:
         members = filter(f, members)
-    return members
+    return [copy.deepcopy(member) for member in members]
 
 
 @log_call
@@ -280,28 +271,35 @@ def image_member_create(context, values):
                                   values.get('can_share', False))
     global DATA
     DATA['members'].append(member)
-    return member
+    return copy.deepcopy(member)
 
 
 @log_call
-def image_member_delete(context, member):
+def image_member_update(context, member_id, values):
     global DATA
-    mem = None
-    for p in DATA['members']:
-        if (p['member'] == member['member'] and
-            p['image_id'] == member['image_id']):
-            mem = p
-    if not mem:
+    for member in DATA['members']:
+        if (member['id'] == member_id):
+            member.update(values)
+            return copy.deepcopy(member)
+    else:
         raise exception.NotFound()
-    mem['deleted_at'] = datetime.datetime.utcnow()
-    mem['deleted'] = True
-    return mem
+
+
+@log_call
+def image_member_delete(context, member_id):
+    global DATA
+    for i, member in enumerate(DATA['members']):
+        if (member['id'] == member_id):
+            del DATA['members'][i]
+            break
+    else:
+        raise exception.NotFound()
 
 
 @log_call
 def image_create(context, image_values):
     global DATA
-    image_id = image_values.get('id', str(uuid.uuid4()))
+    image_id = image_values.get('id', utils.generate_uuid())
 
     if image_id in DATA['images']:
         raise exception.Duplicate()
@@ -342,9 +340,8 @@ def image_update(context, image_id, image_values, purge_props=False):
             prop['deleted'] = True
 
     # add in any completly new properties
-    image['properties'].extend([
-            {'name': k, 'value': v, 'deleted': False}
-             for k, v in new_properties.items()])
+    image['properties'].extend([{'name': k, 'value': v, 'deleted': False}
+                                for k, v in new_properties.items()])
 
     image['updated_at'] = timeutils.utcnow()
     image.update(image_values)

@@ -36,7 +36,7 @@ LOG = logging.getLogger(__name__)
 scrubber_opts = [
     cfg.BoolOpt('cleanup_scrubber', default=False),
     cfg.IntOpt('cleanup_scrubber_time', default=86400)
-    ]
+]
 
 CONF = cfg.CONF
 CONF.register_opts(scrubber_opts)
@@ -121,10 +121,16 @@ class Scrubber(object):
                 delete_work.append((id, uri, now))
 
         LOG.info(_("Deleting %s images") % len(delete_work))
+<<<<<<< HEAD
+        # NOTE(bourke): The starmap must be iterated to do work
+        for job in pool.starmap(self._delete, delete_work):
+            pass
+=======
         pool.starmap(self._delete, delete_work)
         # NOTE(bourke): When not running as a daemon, a slight pause is needed
         # to allow the starmap to begin it's work.
         eventlet.sleep(0.1)
+>>>>>>> 8321ca6ff4d2ab15bece70d7ff84f2e3dd3f6896
 
         if self.cleanup:
             self._cleanup(pool)
@@ -187,7 +193,9 @@ class Scrubber(object):
                                 now))
 
         LOG.info(_("Deleting %s images") % len(delete_work))
-        pool.starmap(self._delete, delete_work)
+        # NOTE(bourke): The starmap must be iterated to do work
+        for job in pool.starmap(self._delete, delete_work):
+            pass
 
 
 def read_queue_file(file_path):

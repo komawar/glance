@@ -61,7 +61,7 @@ swift_opts = [
     cfg.BoolOpt('swift_store_create_container_on_put', default=False),
     cfg.BoolOpt('swift_store_multi_tenant', default=False),
     cfg.ListOpt('swift_store_admin_tenants', default=[]),
-    ]
+]
 
 CONF = cfg.CONF
 CONF.register_opts(swift_opts)
@@ -128,14 +128,12 @@ class StoreLocation(glance.store.location.StoreLocation):
         # swift://user:pass@http://authurl.com/v1/container/obj
         # are immediately rejected.
         if uri.count('://') != 1:
-            reason = _(
-                    "URI cannot contain more than one occurrence of a scheme."
-                    "If you have specified a URI like "
-                    "swift://user:pass@http://authurl.com/v1/container/obj"
-                    ", you need to change it to use the swift+http:// scheme, "
-                    "like so: "
-                    "swift+http://user:pass@authurl.com/v1/container/obj"
-                    )
+            reason = _("URI cannot contain more than one occurrence "
+                       "of a scheme. If you have specified a URI like "
+                       "swift://user:pass@http://authurl.com/v1/container/obj"
+                       ", you need to change it to use the "
+                       "swift+http:// scheme, like so: "
+                       "swift+http://user:pass@authurl.com/v1/container/obj")
             LOG.error(_("Invalid store uri %(uri)s: %(reason)s") % locals())
             raise exception.BadStoreUri(message=reason)
 
@@ -194,13 +192,15 @@ class StoreLocation(glance.store.location.StoreLocation):
 
         HTTPS is assumed, unless 'swift+http' is specified.
         """
-        if self.scheme in ('swift+https', 'swift'):
-            auth_scheme = 'https://'
+        if self.auth_or_store_url.startswith('http'):
+            return self.auth_or_store_url
         else:
-            auth_scheme = 'http://'
+            if self.scheme in ('swift+https', 'swift'):
+                auth_scheme = 'https://'
+            else:
+                auth_scheme = 'http://'
 
-        full_url = ''.join([auth_scheme, self.auth_or_store_url])
-        return full_url
+            return ''.join([auth_scheme, self.auth_or_store_url])
 
 
 class Store(glance.store.base.Store):
@@ -294,7 +294,7 @@ class Store(glance.store.base.Store):
             if e.http_status == httplib.NOT_FOUND:
                 uri = location.get_store_uri()
                 raise exception.NotFound(_("Swift could not find image at "
-                                         "uri %(uri)s") % locals())
+                                           "uri %(uri)s") % locals())
             else:
                 raise
 
@@ -543,7 +543,8 @@ class Store(glance.store.base.Store):
         except swiftclient.ClientException, e:
             if e.http_status == httplib.CONFLICT:
                 raise exception.Duplicate(_("Swift already has an image at "
-                                          "location %s") % location.get_uri())
+                                            "location %s") %
+                                          location.get_uri())
             msg = (_("Failed to add object to Swift.\n"
                      "Got error from Swift: %(e)s") % locals())
             LOG.error(msg)
@@ -597,12 +598,12 @@ class Store(glance.store.base.Store):
             if e.http_status == httplib.NOT_FOUND:
                 uri = location.get_store_uri()
                 raise exception.NotFound(_("Swift could not find image at "
-                                         "uri %(uri)s") % locals())
+                                           "uri %(uri)s") % locals())
             else:
                 raise
 
     def set_acls(self, location, public=False, read_tenants=[],
-                     write_tenants=[]):
+                 write_tenants=[]):
         """
         Sets the read and write access control list for an image in the
         backend store.
@@ -638,7 +639,7 @@ class Store(glance.store.base.Store):
                 if e.http_status == httplib.NOT_FOUND:
                     uri = location.get_store_uri()
                     raise exception.NotFound(_("Swift could not find image at "
-                                             "uri %(uri)s") % locals())
+                                               "uri %(uri)s") % locals())
                 else:
                     raise
 
@@ -677,14 +678,14 @@ def create_container_if_missing(container, swift_conn):
                     swift_conn.put_container(container)
                 except swiftclient.ClientException, e:
                     msg = _("Failed to add container to Swift.\n"
-                           "Got error from Swift: %(e)s") % locals()
+                            "Got error from Swift: %(e)s") % locals()
                     raise glance.store.BackendException(msg)
             else:
                 msg = (_("The container %(container)s does not exist in "
-                       "Swift. Please set the "
-                       "swift_store_create_container_on_put option"
-                       "to add container to Swift automatically.")
-                       % locals())
+                         "Swift. Please set the "
+                         "swift_store_create_container_on_put option"
+                         "to add container to Swift automatically.") %
+                       locals())
                 raise glance.store.BackendException(msg)
         else:
             raise

@@ -108,6 +108,20 @@ class TestImagesController(test_utils.BaseTestCase):
         expected = set([UUID3])
         self.assertEqual(actual, expected)
 
+    def test_index_admin(self):
+        request = unit_test_utils.get_fake_request(is_admin=True)
+        output = self.controller.index(request)
+        self.assertEqual(4, len(output['images']))
+
+    def test_index_admin_deleted_images_hidden(self):
+        request = unit_test_utils.get_fake_request(is_admin=True)
+        self.controller.delete(request, UUID1)
+        output = self.controller.index(request)
+        self.assertEqual(3, len(output['images']))
+        actual = set([image['id'] for image in output['images']])
+        expected = set([UUID2, UUID3, UUID4])
+        self.assertEqual(actual, expected)
+
     def test_index_return_parameters(self):
         self.config(limit_param_default=1, api_limit_max=3)
         request = unit_test_utils.get_fake_request()
@@ -200,7 +214,7 @@ class TestImagesController(test_utils.BaseTestCase):
         image = _fixture(utils.generate_uuid(), is_public=False, owner=TENANT3)
         self.db.image_create(None, image)
         path = '/images?visibility=private'
-        request = unit_test_utils.get_fake_request(path)
+        request = unit_test_utils.get_fake_request(path, is_admin=True)
         output = self.controller.index(request, filters={'is_public': False})
         self.assertEqual(2, len(output['images']))
 
@@ -208,7 +222,10 @@ class TestImagesController(test_utils.BaseTestCase):
         url = '/images?status=queued&name=2'
         request = unit_test_utils.get_fake_request(url)
         output = self.controller.index(request,
-                filters={'status': 'queued', 'name': '2'})
+                                       filters={
+                                           'status': 'queued',
+                                           'name': '2',
+                                       })
         self.assertEqual(1, len(output['images']))
         actual = set([image['id'] for image in output['images']])
         expected = set([UUID2])
@@ -319,6 +336,12 @@ class TestImagesController(test_utils.BaseTestCase):
         self.assertRaises(webob.exc.HTTPNotFound,
                           self.controller.show, request, image_id)
 
+    def test_show_deleted_image_admin(self):
+        request = unit_test_utils.get_fake_request(is_admin=True)
+        self.controller.delete(request, UUID1)
+        self.assertRaises(webob.exc.HTTPNotFound,
+                          self.controller.show, request, UUID1)
+
     def test_create(self):
         request = unit_test_utils.get_fake_request()
         image = {'name': 'image-1'}
@@ -328,9 +351,10 @@ class TestImagesController(test_utils.BaseTestCase):
         self.assertEqual([], output['tags'])
         self.assertEqual(False, output['is_public'])
         output_log = self.notifier.get_log()
-        expected_log = {'notification_type': "INFO",
-                        'event_type': "image.update",
-                        'payload': output,
+        expected_log = {
+            'notification_type': "INFO",
+            'event_type': "image.update",
+            'payload': output,
         }
         self.assertEqual(output_log, expected_log)
 
@@ -340,9 +364,10 @@ class TestImagesController(test_utils.BaseTestCase):
         output = self.controller.create(request, image)
         self.assertEqual(True, output['is_public'])
         output_log = self.notifier.get_log()
-        expected_log = {'notification_type': "INFO",
-                        'event_type': "image.update",
-                        'payload': output,
+        expected_log = {
+            'notification_type': "INFO",
+            'event_type': "image.update",
+            'payload': output,
         }
         self.assertEqual(output_log, expected_log)
 
@@ -352,10 +377,11 @@ class TestImagesController(test_utils.BaseTestCase):
         output = self.controller.create(request, image)
         self.assertEqual(['ping'], output['tags'])
         output_log = self.notifier.get_log()
-        expected_log = {'notification_type': "INFO",
-                        'event_type': "image.update",
-                        'payload': output,
-         }
+        expected_log = {
+            'notification_type': "INFO",
+            'event_type': "image.update",
+            'payload': output,
+        }
         self.assertEqual(output_log, expected_log)
 
     def test_update_no_changes(self):
@@ -365,9 +391,10 @@ class TestImagesController(test_utils.BaseTestCase):
         self.assertEqual(output['created_at'], output['updated_at'])
         self.assertTrue('tags' in output)
         output_log = self.notifier.get_log()
-        expected_log = {'notification_type': "INFO",
-                        'event_type': "image.update",
-                        'payload': output,
+        expected_log = {
+            'notification_type': "INFO",
+            'event_type': "image.update",
+            'payload': output,
         }
         self.assertEqual(output_log, expected_log)
 
@@ -375,6 +402,12 @@ class TestImagesController(test_utils.BaseTestCase):
         request = unit_test_utils.get_fake_request()
         self.assertRaises(webob.exc.HTTPNotFound, self.controller.update,
                           request, utils.generate_uuid(), changes=[])
+
+    def test_update_deleted_image_admin(self):
+        request = unit_test_utils.get_fake_request(is_admin=True)
+        self.controller.delete(request, UUID1)
+        self.assertRaises(webob.exc.HTTPNotFound, self.controller.update,
+                          request, UUID1, changes=[])
 
     def test_update_replace_base_attribute(self):
         self.db.image_update(None, UUID1, {'properties': {'foo': 'bar'}})
@@ -525,9 +558,10 @@ class TestImagesController(test_utils.BaseTestCase):
         output = self.controller.update(request, UUID1, changes)
         self.assertEqual(['ping'], output['tags'])
         output_log = self.notifier.get_log()
-        expected_log = {'notification_type': "INFO",
-                        'event_type': "image.update",
-                        'payload': output,
+        expected_log = {
+            'notification_type': "INFO",
+            'event_type': "image.update",
+            'payload': output,
         }
         self.assertEqual(output_log, expected_log)
 
@@ -607,6 +641,12 @@ class TestImagesController(test_utils.BaseTestCase):
         request = unit_test_utils.get_fake_request()
         self.assertRaises(webob.exc.HTTPNotFound, self.controller.delete,
                           request, utils.generate_uuid())
+
+    def test_delete_already_deleted_image_admin(self):
+        request = unit_test_utils.get_fake_request(is_admin=True)
+        self.controller.delete(request, UUID1)
+        self.assertRaises(webob.exc.HTTPNotFound,
+                          self.controller.delete, request, UUID1)
 
     def test_index_with_invalid_marker(self):
         fake_uuid = utils.generate_uuid()
@@ -1096,7 +1136,7 @@ class TestImagesDeserializerWithExtendedSchema(test_utils.BaseTestCase):
         request = unit_test_utils.get_fake_request()
         request.body = json.dumps({'name': 'image-1', 'pants': 'borked'})
         self.assertRaises(webob.exc.HTTPBadRequest,
-                self.deserializer.create, request)
+                          self.deserializer.create, request)
 
     def test_update(self):
         request = unit_test_utils.get_fake_request()
@@ -1113,7 +1153,8 @@ class TestImagesDeserializerWithExtendedSchema(test_utils.BaseTestCase):
         request.content_type = 'application/openstack-images-v2.0-json-patch'
         request.body = json.dumps([{'add': '/pants', 'value': 'cutoffs'}])
         self.assertRaises(webob.exc.HTTPBadRequest,
-                self.deserializer.update, request)
+                          self.deserializer.update,
+                          request)
 
 
 class TestImagesDeserializerWithAdditionalProperties(test_utils.BaseTestCase):
@@ -1194,11 +1235,19 @@ class TestImagesSerializer(test_utils.BaseTestCase):
         self.serializer = glance.api.v2.images.ResponseSerializer()
         self.fixtures = [
             #NOTE(bcwaldon): This first fixture has every property defined
-            _fixture(UUID1, name='image-1', size=1024, tags=['one', 'two'],
-                    created_at=DATETIME, updated_at=DATETIME, owner=TENANT1,
-                    is_public=True, container_format='ami', disk_format='ami',
-                    checksum='ca425b88f047ce8ec45ee90e813ada91',
-                    min_ram=128, min_disk=10),
+            _fixture(UUID1,
+                     name='image-1',
+                     size=1024,
+                     tags=['one', 'two'],
+                     created_at=DATETIME,
+                     updated_at=DATETIME,
+                     owner=TENANT1,
+                     is_public=True,
+                     container_format='ami',
+                     disk_format='ami',
+                     checksum='ca425b88f047ce8ec45ee90e813ada91',
+                     min_ram=128,
+                     min_disk=10),
 
             #NOTE(bcwaldon): This second fixture depends on default behavior
             # and sets most values to None
@@ -1372,14 +1421,23 @@ class TestImagesSerializerWithUnicode(test_utils.BaseTestCase):
         self.serializer = glance.api.v2.images.ResponseSerializer()
         self.fixtures = [
             #NOTE(bcwaldon): This first fixture has every property defined
-            _fixture(UUID1, name=u'OpenStack\u2122-1',
-                    size=1024, tags=[u'\u2160', u'\u2161'],
-                    created_at=DATETIME, updated_at=DATETIME, owner=TENANT1,
-                    is_public=True, container_format='ami', disk_format='ami',
-                    checksum=u'ca425b88f047ce8ec45ee90e813ada91',
-                    min_ram=128, min_disk=10,
-                    properties={'lang': u'Fran\u00E7ais',
-                                u'dispos\u00E9': u'f\u00E2ch\u00E9'}),
+            _fixture(UUID1,
+                     name=u'OpenStack\u2122-1',
+                     size=1024,
+                     tags=[u'\u2160', u'\u2161'],
+                     created_at=DATETIME,
+                     updated_at=DATETIME,
+                     owner=TENANT1,
+                     is_public=True,
+                     container_format='ami',
+                     disk_format='ami',
+                     checksum=u'ca425b88f047ce8ec45ee90e813ada91',
+                     min_ram=128,
+                     min_disk=10,
+                     properties={
+                         'lang': u'Fran\u00E7ais',
+                         u'dispos\u00E9': u'f\u00E2ch\u00E9',
+                     }),
         ]
 
     def test_index(self):
@@ -1516,10 +1574,17 @@ class TestImagesSerializerWithExtendedSchema(test_utils.BaseTestCase):
         schema = glance.api.v2.images.get_schema(custom_image_properties)
         self.serializer = glance.api.v2.images.ResponseSerializer(schema)
 
-        self.fixture = _fixture(UUID2, name='image-2', owner=TENANT2,
-                checksum='ca425b88f047ce8ec45ee90e813ada91',
-                created_at=DATETIME, updated_at=DATETIME,
-                size=1024, properties={'color': 'green', 'mood': 'grouchy'})
+        self.fixture = _fixture(UUID2,
+                                name='image-2',
+                                owner=TENANT2,
+                                checksum='ca425b88f047ce8ec45ee90e813ada91',
+                                created_at=DATETIME,
+                                updated_at=DATETIME,
+                                size=1024,
+                                properties={
+                                    'color': 'green',
+                                    'mood': 'grouchy',
+                                })
 
     def test_show(self):
         expected = {
@@ -1570,10 +1635,14 @@ class TestImagesSerializerWithAdditionalProperties(test_utils.BaseTestCase):
     def setUp(self):
         super(TestImagesSerializerWithAdditionalProperties, self).setUp()
         self.config(allow_additional_image_properties=True)
-        self.fixture = _fixture(UUID2, name='image-2', owner=TENANT2,
-            checksum='ca425b88f047ce8ec45ee90e813ada91',
-            created_at=DATETIME, updated_at=DATETIME,
-            properties={'marx': 'groucho'}, size=1024)
+        self.fixture = _fixture(UUID2,
+                                name='image-2',
+                                owner=TENANT2,
+                                checksum='ca425b88f047ce8ec45ee90e813ada91',
+                                created_at=DATETIME,
+                                updated_at=DATETIME,
+                                properties={'marx': 'groucho'},
+                                size=1024)
 
     def test_show(self):
         serializer = glance.api.v2.images.ResponseSerializer()
@@ -1651,20 +1720,27 @@ class TestImagesSerializerDirectUrl(test_utils.BaseTestCase):
         super(TestImagesSerializerDirectUrl, self).setUp()
         self.serializer = glance.api.v2.images.ResponseSerializer()
 
-        self.active_image = _fixture(UUID1, name='image-1', is_public=True,
-                status='active', size=1024,
-                created_at=DATETIME, updated_at=DATETIME,
-                location='http://some/fake/location')
+        self.active_image = _fixture(UUID1,
+                                     name='image-1',
+                                     is_public=True,
+                                     status='active', size=1024,
+                                     created_at=DATETIME, updated_at=DATETIME,
+                                     location='http://some/fake/location')
 
-        self.queued_image = _fixture(UUID2, name='image-2', status='active',
-                created_at=DATETIME, updated_at=DATETIME,
-                checksum='ca425b88f047ce8ec45ee90e813ada91')
+        self.queued_image = _fixture(UUID2,
+                                     name='image-2',
+                                     status='active',
+                                     created_at=DATETIME,
+                                     updated_at=DATETIME,
+                                     checksum='ca425b88f047ce8e'
+                                              'c45ee90e813ada91')
 
     def _do_index(self):
         request = webob.Request.blank('/v2/images')
         response = webob.Response(request=request)
         self.serializer.index(response,
-                {'images': [self.active_image, self.queued_image]})
+                              {'images': [self.active_image,
+                                          self.queued_image]})
         return json.loads(response.body)['images']
 
     def _do_show(self, image):

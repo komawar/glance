@@ -41,7 +41,7 @@ s3_opts = [
     cfg.StrOpt('s3_store_object_buffer_dir'),
     cfg.BoolOpt('s3_store_create_bucket_on_put', default=False),
     cfg.StrOpt('s3_store_bucket_url_format', default='subdomain'),
-    ]
+]
 
 CONF = cfg.CONF
 CONF.register_opts(s3_opts)
@@ -102,16 +102,14 @@ class StoreLocation(glance.store.location.StoreLocation):
         # s3://accesskey:secretkey@https://s3.amazonaws.com/bucket/key-id
         # are immediately rejected.
         if uri.count('://') != 1:
-            reason = _(
-                    "URI cannot contain more than one occurrence of a scheme."
-                    "If you have specified a URI like "
-                    "s3://accesskey:secretkey@https://s3.amazonaws.com/bucket/"
-                    "key-id"
-                    ", you need to change it to use the s3+https:// scheme, "
-                    "like so: "
-                    "s3+https://accesskey:secretkey@s3.amazonaws.com/bucket/"
-                    "key-id"
-                      )
+            reason = _("URI cannot contain more than one occurrence "
+                       "of a scheme. If you have specified a URI like "
+                       "s3://accesskey:secretkey@"
+                       "https://s3.amazonaws.com/bucket/key-id"
+                       ", you need to change it to use the "
+                       "s3+https:// scheme, like so: "
+                       "s3+https://accesskey:secretkey@"
+                       "s3.amazonaws.com/bucket/key-id")
             LOG.error(_("Invalid store uri %(uri)s: %(reason)s") % locals())
             raise exception.BadStoreUri(message=reason)
 
@@ -298,8 +296,9 @@ class Store(glance.store.base.Store):
         msg = _("Retrieved image object from S3 using (s3_host=%(s3_host)s, "
                 "access_key=%(accesskey)s, bucket=%(bucket)s, "
                 "key=%(obj_name)s)") % ({'s3_host': loc.s3serviceurl,
-                'accesskey': loc.accesskey, 'bucket': loc.bucket,
-                'obj_name': loc.key})
+                                         'accesskey': loc.accesskey,
+                                         'bucket': loc.bucket,
+                                         'obj_name': loc.key})
         LOG.debug(msg)
 
         return key
@@ -360,8 +359,9 @@ class Store(glance.store.base.Store):
         msg = _("Adding image object to S3 using (s3_host=%(s3_host)s, "
                 "access_key=%(access_key)s, bucket=%(bucket)s, "
                 "key=%(obj_name)s)") % ({'s3_host': self.s3_host,
-                'access_key': self.access_key, 'bucket': self.bucket,
-                'obj_name': obj_name})
+                                         'access_key': self.access_key,
+                                         'bucket': self.bucket,
+                                         'obj_name': obj_name})
         LOG.debug(msg)
 
         key = bucket_obj.new_key(obj_name)
@@ -428,8 +428,9 @@ class Store(glance.store.base.Store):
         msg = _("Deleting image object from S3 using (s3_host=%(s3_host)s, "
                 "access_key=%(accesskey)s, bucket=%(bucket)s, "
                 "key=%(obj_name)s)") % ({'s3_host': loc.s3serviceurl,
-                'accesskey': loc.accesskey, 'bucket': loc.bucket,
-                'obj_name': loc.key})
+                                         'accesskey': loc.accesskey,
+                                         'bucket': loc.bucket,
+                                         'obj_name': loc.key})
         LOG.debug(msg)
 
         return key.delete()

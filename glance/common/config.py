@@ -34,13 +34,13 @@ from glance.version import version_info as version
 paste_deploy_opts = [
     cfg.StrOpt('flavor'),
     cfg.StrOpt('config_file'),
-    ]
+]
 common_opts = [
     cfg.BoolOpt('allow_additional_image_properties', default=True,
                 help=_('Whether to allow users to specify image properties '
                 'beyond what the image schema provides')),
     cfg.StrOpt('data_api', default='glance.db.sqlalchemy.api',
-                help=_('Python module path of data access API')),
+               help=_('Python module path of data access API')),
     cfg.IntOpt('limit_param_default', default=25,
                help=_('Default value for the number of items returned by a '
                'request if not specified explicitly in the request')),
