@@ -69,12 +69,13 @@ def _image_property_format(image_id, name, value):
     }
 
 
-def _image_member_format(image_id, tenant_id, can_share):
+def _image_member_format(image_id, tenant_id, can_share, deleted):
     return {
         'id': utils.generate_uuid(),
         'image_id': image_id,
         'member': tenant_id,
         'can_share': can_share,
+        'deleted': deleted,
     }
 
 
