@@ -63,6 +63,12 @@ class ImageFactory(object):
                      container_format=container_format,
                      extra_properties=extra_properties, tags=tags)
 
+    def import_image(self, source):
+        return self.task_factory.new_task(
+            request='import_image',
+            parameters={'source': source},
+        )
+
 
 class Image(object):
 
@@ -135,6 +141,21 @@ class Image(object):
 
     def set_data(self, data, size=None):
         raise NotImplementedError()
+
+    def export(self, destination):
+        return self.task_factory.new_task(
+            request="export_image",
+            parameters={'destination': destination},
+        )
+
+    def copy_data_from(self, location):
+        return self.task_factory.new_task(
+            request='image_copy_from',
+            parameters={
+                'image': self,
+                'location': location,
+            },
+        )
 
 
 class ImageMembership(object):

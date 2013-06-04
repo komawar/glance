@@ -63,6 +63,23 @@ class ImagesController(object):
 
         return image
 
+    def import_image(self, req, source):
+        image_factory = self.gateway.get_image_factory(req.context)
+        task_repo = self.gateway.get_task_repo(req.context)
+        import_task = image_factory.import_image(source)
+        task_repo.save(import_task)
+        import_task.run()
+        return import_task
+
+    def export_image(self, req, image_id, dest):
+        image_repo = self.gateway.get_image_repo(req.context)
+        task_repo = self.gateway.get_task_repo(req.context)
+        image = image_repo.get(image_id)
+        export_task = image.export(dest)
+        task_repo.save(export_task)
+        export_task.run()
+        return export_task
+
     def index(self, req, marker=None, limit=None, sort_key='created_at',
               sort_dir='desc', filters=None, member_status='accepted'):
         result = {}
