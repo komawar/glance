@@ -10,7 +10,7 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
-class ImagesController(object):
+class TasksController(object):
     def __init__(self, gateway):
         self.gateway = gateway
 

@@ -11,6 +11,7 @@
 #    under the License.
 
 import glance.exception
+from glance.openstack.common import importutils
 from glance.openstack.common import timeutils
 from glance.openstack.common import uuidutils
 
@@ -78,8 +79,14 @@ class TaskFactory(object):
 
 
 class TaskRunnerInterface(object):
-    def run(self, task):
-        pass
+    def __init__(self, task):
+        if not async_processor:
+            importutils.import_object(CONF.async_processor_class)
+        self.async_processor = async_processor
+        self.task = task
+
+    def run(self):
+        self.async_processor.run()
 
     def kill(self, task):
-        pass
+        self.async_processor.kill()
