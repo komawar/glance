@@ -254,6 +254,15 @@ class ImageMemberRepo(object):
         return image_member
 
 
+class TaskProxy(glance.domain.async.Task):
+
+    def __init__(self, task, context, db_api):
+        self.context = context
+        self.db_api = db_api
+        self.task = task
+        super(TaskProxy, self).__init__(task)
+
+
 class TaskRepo(object):
 
     def __init__(self, context, db_api):
