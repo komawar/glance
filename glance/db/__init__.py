@@ -252,3 +252,79 @@ class ImageMemberRepo(object):
         image_member = self._format_image_member_from_db(
                                                     db_api_image_member[0])
         return image_member
+
+
+class TaskRepo(object):
+
+    def __init__(self, context, db_api):
+        self.context = context
+        self.db_api = db_api
+
+    def get(self, task_id):
+        try:
+            db_api_task = dict(self.db_api.task_get(self.context, task_id))
+            assert not db_api_task['deleted']
+        except (exception.NotFound, exception.Forbidden, AssertionError):
+            raise exception.NotFound(task_id=task_id)
+        task = self._format_task_from_db(db_api_task, tags)
+        return TaskProxy(task, self.context, self.db_api)
+
+    def list(self, marker=None, limit=None, sort_key='created_at',
+             sort_dir='desc', filters=None, member_status='accepted'):
+        db_api_tasks = self.db_api.task_get_all(
+                self.context, filters=filters, marker=marker, limit=limit,
+                sort_key=sort_key, sort_dir=sort_dir)
+        tasks = []
+        for db_api_task in db_api_tasks:
+            task = self._format_task_from_db(dict(db_api_task))
+            tasks.append(task)
+        return tasks
+
+    def _format_task_from_db(self, db_task):
+        return glance.domain.Task(
+            task_id=db_task['id'],
+            status=db_task['status'],
+            created_at=db_task['created_at'],
+            updated_at=db_task['updated_at'],
+            started_at=db_task['started_at'],
+            stopped_at=db_task['stopped_at'],
+            owner=db_task['owner'],
+        )
+
+    def _format_task_to_db(self, task):
+        return {
+            'id': task.task_id,
+            'status': task.status,
+            'created_at': task.created_at,
+            'updated_at': task.updated_at,
+            'started_at': task.started_at,
+            'created_at': task.stopped_at,
+            'owner': task.owner,
+        }
+
+    def add(self, task):
+        task_values = self._format_task_to_db(task)
+        new_values = self.db_api.task_create(self.context, task_values)
+        task.created_at = new_values['created_at']
+        task.updated_at = new_values['updated_at']
+
+    def save(self, task):
+        task_values = self._format_task_to_db(task)
+        try:
+            new_values = self.db_api.task_update(self.context,
+                                                 task.task_id,
+                                                 task_values)
+        except (exception.NotFound, exception.Forbidden):
+            raise exception.NotFound(task_id=task.task_id)
+        self.db_api.task_tag_set_all(self.context, task.task_id)
+        task.updated_at = new_values['updated_at']
+
+    def remove(self, task):
+        task_values = self._format_task_to_db(task)
+        try:
+            self.db_api.task_update(self.context, task.task_id,
+                                    task_values)
+        except (exception.NotFound, exception.Forbidden):
+            raise exception.NotFound(task_id=task.task_id)
+        new_values = self.db_api.task_destroy(self.context, task.task_id)
+        task.updated_at = new_values['updated_at']

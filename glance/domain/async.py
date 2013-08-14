@@ -25,7 +25,7 @@ class Task(object):
         self.task_id = task_id
         self.request = request
         self.parameters = parameters
-        self.result = result
+        #self.result = result
         self._status = status
         self.message = message
         self.created_at = created_at
