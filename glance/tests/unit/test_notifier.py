@@ -2,6 +2,7 @@
 
 # Copyright 2011 OpenStack, LLC
 # All Rights Reserved.
+# Copyright 2013 IBM Corp.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -66,6 +67,34 @@ class ImageRepoStub(object):
 
     def list(self, *args, **kwargs):
         return ['images_from_list']
+
+
+class TaskStub(glance.domain.Task):
+    def run(self):
+        pass
+
+    def complete(self, result):
+        pass
+
+    def fail(self, message):
+        pass
+
+
+class TaskRepoStub(object):
+    def remove(self, *args, **kwargs):
+        return 'task_from_remove'
+
+    def save(self, *args, **kwargs):
+        return 'task_from_save'
+
+    def add(self, *args, **kwargs):
+        return 'task_from_add'
+
+    def get(self, *args, **kwargs):
+        return 'task_from_get'
+
+    def list(self, *args, **kwargs):
+        return ['tasks_from_list']
 
 
 class TestNotifier(utils.BaseTestCase):
@@ -719,3 +748,34 @@ class TestImageNotifications(utils.BaseTestCase):
         self.assertEqual(output_log['notification_type'], 'ERROR')
         self.assertEqual(output_log['event_type'], 'image.upload')
         self.assertTrue('Failed' in output_log['payload'])
+
+
+class TestTaskNotifications(utils.BaseTestCase):
+    """Test Task Notifications work"""
+
+    def setUp(self):
+        super(TestTaskNotifications, self).setUp()
+        self.task = TaskStub(
+                task_id='aaa', type='import', status='pending',
+                input={"loc": "fake"}, result='', owner=TENANT2, message='',
+                expires_at=None, created_at=DATETIME,
+                updated_at=DATETIME)
+        self.context = glance.context.RequestContext(tenant=TENANT2,
+                                                     user=USER1)
+        self.task_repo_stub = TaskRepoStub()
+        self.notifier = unit_test_utils.FakeNotifier()
+        self.task_repo_proxy = glance.notifier.TaskRepoProxy(
+                self.task_repo_stub, self.context, self.notifier)
+        self.task_proxy = glance.notifier.TaskProxy(
+                self.task, self.context, self.notifier)
+
+    def test_task_add_notification(self):
+        self.task_repo_proxy.add(self.task_proxy)
+        output_logs = self.notifier.get_logs()
+        self.assertEqual(len(output_logs), 1)
+        output_log = output_logs[0]
+        self.assertEqual(output_log['notification_type'], 'INFO')
+        self.assertEqual(output_log['event_type'], 'task.create')
+        self.assertEqual(output_log['payload']['id'], self.task.task_id)
+        if 'location' in output_log['payload']:
+            self.fail('Notification contained location field.')

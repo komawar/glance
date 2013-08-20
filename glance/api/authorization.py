@@ -1,5 +1,6 @@
 # Copyright 2012 OpenStack Foundation
 # All Rights Reserved.
+# Copyright 2013 IBM Corp.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -51,6 +52,24 @@ def proxy_member(context, member):
         return member
     else:
         return ImmutableMemberProxy(member)
+
+
+def is_task_mutable(context, task):
+    """Return True if the task is mutable in this context."""
+    if context.is_admin:
+        return True
+
+    if context.owner is None:
+        return False
+
+    return task.owner == context.owner
+
+
+def proxy_task(context, task):
+    if is_task_mutable(context, task):
+        return task
+    else:
+        return ImmutableTaskProxy(task)
 
 
 class ImageRepoProxy(glance.domain.proxy.Repo):
@@ -129,6 +148,30 @@ class ImageMemberRepoProxy(glance.domain.proxy.Repo):
             raise exception.Forbidden(message % image_member.member_id)
 
 
+class TaskRepoProxy(glance.domain.proxy.Repo):
+
+    def __init__(self, task_repo, context):
+        self.task_repo = task_repo
+        self.context = context
+        super(TaskRepoProxy, self).__init__(task_repo)
+
+    def get(self, task_id):
+        task = self.task_repo.get(task_id)
+        return proxy_task(self.context, task)
+
+    def list(self, marker=None, limit=None, sort_key='created_at',
+             sort_dir='desc', filters=None):
+        tasks = self.task_repo.list(marker, limit, sort_key,
+                                    sort_dir, filters)
+        return [proxy_task(self.context, t) for t in tasks]
+
+    def add(self, task):
+        return super(TaskRepoProxy, self).add(task)
+
+    def save(self, task):
+        return super(TaskRepoProxy, self).save(task)
+
+
 class ImageFactoryProxy(glance.domain.proxy.ImageFactory):
 
     def __init__(self, image_factory, context):
@@ -171,6 +214,23 @@ class ImageMemberFactoryProxy(object):
             raise exception.Forbidden(message)
 
         return self.image_member_factory.new_image_member(image, member_id)
+
+
+class TaskFactoryProxy(glance.domain.proxy.TaskFactory):
+
+    def __init__(self, task_factory, context):
+        self.task_factory = task_factory
+        self.context = context
+
+    def new_task(self, req, task, gateway):
+        if 'owner' in task:
+            owner = task['owner']
+            if not self.context.is_admin:
+                if owner is None or owner != self.context.owner:
+                    message = _("You are not permitted to create task by "
+                                "owner: %s.")
+                    raise exception.Forbidden(message % owner)
+        return self.task_factory.new_task(req, task, gateway)
 
 
 def _immutable_attr(target, attr, proxy=None):
@@ -290,6 +350,21 @@ class ImmutableMemberProxy(object):
     image_id = _immutable_attr('base', 'image_id')
     member_id = _immutable_attr('base', 'member_id')
     status = _immutable_attr('base', 'status')
+    created_at = _immutable_attr('base', 'created_at')
+    updated_at = _immutable_attr('base', 'updated_at')
+
+
+class ImmutableTaskProxy(object):
+    def __init__(self, base):
+        self.base = base
+
+    task_id = _immutable_attr('base', 'task_id')
+    type = _immutable_attr('base', 'type')
+    status = _immutable_attr('base', 'status')
+    input = _immutable_attr('base', 'input')
+    owner = _immutable_attr('base', 'owner')
+    message = _immutable_attr('base', 'message')
+    expires_at = _immutable_attr('base', 'expires_at')
     created_at = _immutable_attr('base', 'created_at')
     updated_at = _immutable_attr('base', 'updated_at')
 

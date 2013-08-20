@@ -21,6 +21,8 @@ SQLAlchemy models for glance data
 """
 import json
 
+import json
+
 from sqlalchemy import Column, Integer, String, BigInteger
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.ext.declarative import declarative_base
@@ -28,6 +30,7 @@ from sqlalchemy import ForeignKey, DateTime, Boolean, Text
 from sqlalchemy.orm import relationship, backref, object_mapper
 from sqlalchemy.types import TypeDecorator
 from sqlalchemy import Index, UniqueConstraint
+from sqlalchemy.types import TypeDecorator
 
 from glance.openstack.common import timeutils
 from glance.openstack.common import uuidutils
@@ -212,6 +215,24 @@ class ImageMember(BASE, ModelBase):
     member = Column(String(255), nullable=False)
     can_share = Column(Boolean, nullable=False, default=False)
     status = Column(String(20), nullable=False, default="pending")
+
+
+class Task(BASE, ModelBase):
+    """Represents an task in the datastore"""
+    __tablename__ = 'tasks'
+    __table_args__ = (Index('ix_tasks_type', 'type'),
+                      Index('ix_tasks_status', 'status'),
+                      Index('ix_tasks_owner', 'owner'))
+
+    id = Column(String(36), primary_key=True, default=uuidutils.generate_uuid)
+    type = Column(String(30))
+    status = Column(String(30))
+    input = Column(JSONEncodedDict())
+    result = Column(JSONEncodedDict())
+    owner = Column(String(255))
+    message = Column(Text)
+    expires_at = Column(DateTime, default=timeutils.utcnow,
+                        nullable=False, onupdate=timeutils.utcnow)
 
 
 def register_models(engine):
