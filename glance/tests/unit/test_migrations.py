@@ -774,3 +774,19 @@ class TestMigrations(utils.BaseTestCase):
                       for idx in new_table.indexes]
 
         self.assertIn((index, columns), index_data)
+
+    def _check_028(self, engine, data):
+        table = "tasks"
+        index_type = ('ix_tasks_type', ['type'])
+        index_status = ('ix_tasks_status', ['status'])
+
+        meta = sqlalchemy.MetaData()
+        meta.bind = engine
+
+        new_table = sqlalchemy.Table(table, meta, autoload=True)
+
+        index_data = [(idx.name, idx.columns.keys())
+                      for idx in new_table.indexes]
+
+        self.assertIn(index_type, index_data)
+        self.assertIn(index_status, index_data)
