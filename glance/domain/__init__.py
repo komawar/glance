@@ -1,5 +1,6 @@
-# Copyright 2012 OpenStack Foundation
+# Copyright 2013 OpenStack Foundation
 # All Rights Reserved.
+# Copyright 2013 IBM Corp.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -19,6 +20,7 @@ from oslo.config import cfg
 from glance.common import exception
 from glance.openstack.common import timeutils
 from glance.openstack.common import uuidutils
+from glance.domain.async import import_executor
 
 
 image_format_opts = [
@@ -216,3 +218,73 @@ class ImageMemberFactory(object):
         return ImageMembership(image_id=image.image_id, member_id=member_id,
                                created_at=created_at, updated_at=updated_at,
                                status='pending')
+
+
+class Task(object):
+    def __init__(self, task_id, type, status, input, result, owner, message,
+                 expires_at, created_at, updated_at):
+        if type not in ('import', 'export', 'clone'):
+            raise exception.InvalidTaskType(type)
+
+        if status not in ('pending', 'success', 'failure', 'processing'):
+            raise exception.InvalidTaskStatus(status)
+
+        self.task_id = task_id
+        self._status = status
+        self.type = type
+        self.input = input
+        self.result = result
+        self.owner = owner
+        self.message = message
+        self.expires_at = expires_at
+        self.created_at = created_at
+        self.updated_at = updated_at
+
+    @property
+    def status(self):
+        return self._status
+
+    def run(self, executor):
+        # NOTE (flwang) The task status won't be set here but handled by the
+        # executor.
+        if executor:
+            executor.run(self.task_id)
+
+    def kill(self, message=None):
+        raise NotImplementedError()
+
+    def success(self, result):
+        self._status = 'success'
+        self.result = result
+
+    def fail(self, message):
+        self._status = 'failure'
+        self.message = message
+
+
+class TaskFactory(object):
+
+    def new_task(self, context, task, gateway):
+        if context is None:
+            raise ValueError('request can not be None')
+
+        task_id = uuidutils.generate_uuid()
+        type = task['type']
+        status = 'pending'
+        input = task['input']
+        result = None
+        owner = context.owner or task['owner']
+        message = None
+        expires_at = None  # NOTE (flwang) Depends on the expire policy
+        created_at = timeutils.utcnow()
+        updated_at = created_at
+        return Task(task_id, type, status, input, result, owner, message,
+                    expires_at, created_at, updated_at)
+
+
+class TaskExecutorFactory(object):
+    def new_task_executor(self, context, task, gateway):
+        if task['type'] == 'import':
+            return import_executor.TaskImportExecutor(context, gateway)
+
+        raise exception.InvalidTaskType(type=task['type'])

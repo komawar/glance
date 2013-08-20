@@ -86,6 +86,7 @@ class FakeDB(object):
             'members': [],
             'tags': {},
             'locations': [],
+            'tasks': {}
         }
 
     def __getattr__(self, key):
@@ -204,3 +205,48 @@ class FakeNotifier(object):
 
     def get_logs(self):
         return self.log
+
+
+class FakeGateway(object):
+    def __init__(self, **kwargs):
+        self.image_factory = None
+        self.image_member_factory = None
+        self.image_repo = None
+        self.task_factory = None
+        self.task_repo = None
+
+    def get_image_factory(self, context):
+        return self.image_factory
+
+    def get_image_member_factory(self, context):
+        return self.image_member_factory
+
+    def get_repo(self, context):
+        return self.image_repo
+
+    def get_task_factory(self, context):
+        return self.task_factory
+
+    def get_task_repo(self, context):
+        return self.task_repo
+
+    def get_db_task_repo(self, context):
+        return self.task_repo
+
+
+class FakeTask(object):
+    def __init__(self, task_id, type=None, status=None):
+        self.task_id = task_id
+        self.type = type
+        self.message = None
+        self.input = None
+        self._status = status
+        self._executor = None
+
+    def success(self, result):
+        self.result = result
+        self._status = 'success'
+
+    def fail(self, message):
+        self.message = message
+        self._status = 'failure'

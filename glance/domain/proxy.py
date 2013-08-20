@@ -1,5 +1,6 @@
 # Copyright 2013 OpenStack Foundation
 # All Rights Reserved.
+# Copyright 2013 IBM Corp.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -130,3 +131,43 @@ class Image(object):
 
     def get_member_repo(self):
         return self.helper.proxy(self.base.get_member_repo())
+
+
+class Task(object):
+    def __init__(self, base, task_repo_proxy_class=None,
+                 task_repo_proxy_kwargs=None):
+        self.base = base
+        self.helper = Helper(task_repo_proxy_class, task_repo_proxy_kwargs)
+
+    task_id = _proxy('base', 'task_id')
+    type = _proxy('base', 'type')
+    status = _proxy('base', 'status')
+    input = _proxy('base', 'input')
+    result = _proxy('base', 'result')
+    owner = _proxy('base', 'owner')
+    message = _proxy('base', 'message')
+    expires_at = _proxy('base', 'expires_at')
+    created_at = _proxy('base', 'created_at')
+    updated_at = _proxy('base', 'updated_at')
+
+    def run(self, executor):
+        self.base.run(executor)
+
+    def kill(self):
+        raise NotImplementedError()
+
+    def success(self, result):
+        self.base.success(result)
+
+    def fail(self, message):
+        self.base.fail(message)
+
+
+class TaskFactory(object):
+    def __init__(self, base, proxy_class=None, proxy_kwargs=None):
+        self.helper = Helper(proxy_class, proxy_kwargs)
+        self.base = base
+
+    def new_task(self, request, task, gateway):
+        t = self.base.new_task(request, task, gateway)
+        return self.helper.proxy(t)

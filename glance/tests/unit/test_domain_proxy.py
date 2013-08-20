@@ -1,5 +1,6 @@
 # Copyright 2013 OpenStack Foundation.
 # All Rights Reserved.
+# Copyright 2013 IBM Corp.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -279,3 +280,42 @@ class TestImage(test_utils.BaseTestCase):
         member_repo = proxy_image.get_member_repo()
         self.assertTrue(isinstance(member_repo, FakeProxy))
         self.assertEqual(member_repo.base, 'corn')
+
+
+class FakeTaskFactory(object):
+    def __init__(self, result=None):
+        self.result = None
+        self.kwargs = None
+
+    def new_task(self, request, task, gateway):
+        self.request = request
+        self.task = task
+        self.gateway = gateway
+        return self.result
+
+
+class TestTaskFactory(test_utils.BaseTestCase):
+    def setUp(self):
+        super(TestTaskFactory, self).setUp()
+        self.factory = FakeTaskFactory()
+
+    def test_proxy_plain(self):
+        proxy_factory = proxy.TaskFactory(self.factory)
+        self.factory.result = 'test'
+        task = proxy_factory.new_task(request=1, task='two', gateway='foo')
+        self.assertEqual(task, 'test')
+        self.assertEqual(self.factory.request, 1)
+        self.assertEqual(self.factory.task, 'two')
+        self.assertEqual(self.factory.gateway, 'foo')
+
+    def test_proxy_wrapping(self):
+        proxy_factory = proxy.TaskFactory(self.factory,
+                                          proxy_class=FakeProxy,
+                                          proxy_kwargs={'dog': 'bark'})
+        self.factory.result = 'stark'
+        task = proxy_factory.new_task(request=1, task='two', gateway='foo')
+        self.assertTrue(isinstance(task, FakeProxy))
+        self.assertEqual(task.base, 'stark')
+        self.assertEqual(self.factory.request, 1)
+        self.assertEqual(self.factory.task, 'two')
+        self.assertEqual(self.factory.gateway, 'foo')

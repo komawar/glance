@@ -1,5 +1,6 @@
 # Copyright 2012 OpenStack Foundation.
 # All Rights Reserved.
+# Copyright 2013 IBM Corp.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -15,8 +16,12 @@
 
 from glance.common import exception
 from glance import domain
+from glance.domain.async import import_executor
+import glance.tests.unit.utils as unit_utils
 import glance.tests.utils as test_utils
+import glance.tests.unit.utils as unittest_utils
 
+import mock
 
 UUID1 = 'c80a1a6c-bd1f-41c5-90ee-81afedb1d58d'
 TENANT1 = '6838eb7b-6ded-434a-882c-b344c77fe8df'
@@ -275,3 +280,92 @@ class TestExtraProperties(test_utils.BaseTestCase):
         extra_properties = domain.ExtraProperties(a_dict)
         random_list = ['foo', 'bar']
         self.assertFalse(extra_properties.__eq__(random_list))
+
+
+class TestTaskFactory(test_utils.BaseTestCase):
+
+    def setUp(self):
+        super(TestTaskFactory, self).setUp()
+        self.task_factory = domain.TaskFactory()
+
+    def test_new_task(self):
+        task_values = {'type': 'import',
+                       'input': '{"loc": "fake"}',
+                       'owner': TENANT1
+                       }
+        request = unittest_utils.get_fake_request()
+        gateway = unittest_utils.FakeGateway()
+        task = self.task_factory.new_task(context=request.context,
+                                          task=task_values,
+                                          gateway=gateway)
+        self.assertTrue(task.task_id is not None)
+        self.assertTrue(task.created_at is not None)
+        self.assertEqual(task.created_at, task.updated_at)
+        self.assertEqual(task.status, 'pending')
+        self.assertEqual(task.owner, TENANT1)
+        self.assertEqual(task.input, '{"loc": "fake"}')
+
+
+class TestTask(test_utils.BaseTestCase):
+
+    def setUp(self):
+        super(TestTask, self).setUp()
+        self.task_factory = domain.TaskFactory()
+        self.task_values = {
+            'type': 'import',
+            'input': '{"loc": "fake"}',
+            'owner': TENANT1
+        }
+        self.request = unittest_utils.get_fake_request()
+        self.context = self.request.context
+        self.gateway = unittest_utils.FakeGateway()
+        self.task = self.task_factory.new_task(context=self.context,
+                                               task=self.task_values,
+                                               gateway=self.gateway)
+
+    def test_run(self):
+        with mock.patch.object(domain.TaskExecutorFactory,
+                               'new_task_executor') as mock_new_task_executor:
+            mock_new_task_executor.return_value = None
+            task = self.task_factory.new_task(context=self.context,
+                                              task=self.task_values,
+                                              gateway=self.gateway)
+
+            self.assertEquals(task.run(executor=mock_new_task_executor), None)
+
+    def test_complete(self):
+        self.task.success('{"Target": "file://home"}')
+        self.assertEqual(self.task.status, 'success')
+
+    def test_fail(self):
+        self.task.fail('{"msg": "connection failed"}')
+        self.assertEqual(self.task.status, 'failure')
+
+
+class TestTaskExecutorFactory(test_utils.BaseTestCase):
+
+    def setUp(self):
+        super(TestTaskExecutorFactory, self).setUp()
+        self.request = unit_utils.get_fake_request()
+        self.context = self.request.context
+        self.executor_factory = domain.TaskExecutorFactory()
+        self.fake_gateway = unittest_utils.FakeGateway()
+
+    def test_new_task_executor_task_type_import(self):
+        task = {'type': 'import'}
+
+        executor = self.executor_factory.new_task_executor(self.context,
+                                                           task,
+                                                           self.fake_gateway)
+
+        self.assertTrue(isinstance(executor,
+                        import_executor.TaskImportExecutor))
+        self.assertEqual(executor.context, self.context)
+
+    def test_new_task_executor_invalid_task_type(self):
+        task = {'type': 'invalid'}
+
+        executor = self.executor_factory.new_task_executor
+
+        self.assertRaises(exception.InvalidTaskType, executor, self.context,
+                          task, self.fake_gateway)

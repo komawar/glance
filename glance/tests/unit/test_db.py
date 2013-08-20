@@ -1,5 +1,6 @@
 # Copyright 2012 OpenStack Foundation.
 # All Rights Reserved.
+# Copyright 2013 IBM Corp.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -74,6 +75,21 @@ def _db_image_member_fixture(image_id, member_id, **kwargs):
     obj = {
         'image_id': image_id,
         'member': member_id,
+    }
+    obj.update(kwargs)
+    return obj
+
+
+def _db_task_fixture(task_id, type, status, **kwargs):
+    obj = {
+        'id': task_id,
+        'type': type,
+        'status': status,
+        'input': None,
+        'result': None,
+        'owner': None,
+        'message': None,
+        'deleted': False,
     }
     obj.update(kwargs)
     return obj
@@ -436,3 +452,145 @@ class TestImageMemberRepo(test_utils.BaseTestCase):
                                    .new_image_member(image, TENANT4)
         self.assertRaises(exception.NotFound, self.image_member_repo.remove,
                           fake_member)
+
+
+class TestTaskRepo(test_utils.BaseTestCase):
+
+    def setUp(self):
+        super(TestTaskRepo, self).setUp()
+        self.db = unit_test_utils.FakeDB()
+        self.db.reset()
+        self.context = glance.context.RequestContext(
+                user=USER1, tenant=TENANT1)
+        self.task_repo = glance.db.TaskRepo(self.context, self.db)
+        self.task_factory = glance.domain.TaskFactory()
+        self._create_tasks()
+
+    def _create_tasks(self):
+        self.db.reset()
+        self.tasks = [
+            _db_task_fixture(UUID1, type='import', status='pending',
+                             input='',
+                             result='',
+                             owner=TENANT1,
+                             message='',
+                             ),
+            _db_task_fixture(UUID2, type='export', status='processing',
+                             input='',
+                             result='',
+                             owner=TENANT1,
+                             message='',
+                             ),
+            _db_task_fixture(UUID3, type='import', status='failure',
+                             input='',
+                             result='',
+                             owner=TENANT1,
+                             message='',
+                             ),
+            _db_task_fixture(UUID4, type='clone', status='success',
+                             input='',
+                             result='',
+                             owner=TENANT2,
+                             message='',
+                             ),
+        ]
+        [self.db.task_create(None, task) for task in self.tasks]
+
+    def test_get(self):
+        task = self.task_repo.get(UUID1)
+        self.assertEquals(task.task_id, UUID1)
+        self.assertEquals(task.type, 'import')
+        self.assertEquals(task.status, 'pending')
+        self.assertEquals(task.input, '')
+        self.assertEquals(task.result, '')
+        self.assertEquals(task.owner, TENANT1)
+
+    def test_get_not_found(self):
+        self.assertRaises(exception.NotFound, self.task_repo.get,
+                          uuidutils.generate_uuid())
+
+    def test_get_forbidden(self):
+        self.assertRaises(exception.NotFound, self.task_repo.get, UUID4)
+
+    def test_list(self):
+        tasks = self.task_repo.list()
+        task_ids = set([i.task_id for i in tasks])
+        self.assertEqual(set([UUID1, UUID2, UUID3]), task_ids)
+
+    def test_list_with_type(self):
+        filters = {'type': 'import'}
+        tasks = self.task_repo.list(filters=filters)
+        task_ids = set([i.task_id for i in tasks])
+        self.assertEqual(set([UUID1, UUID3]), task_ids)
+
+    def test_list_with_status(self):
+        filters = {'status': 'failure'}
+        tasks = self.task_repo.list(filters=filters)
+        task_ids = set([i.task_id for i in tasks])
+        self.assertEqual(set([UUID3]), task_ids)
+
+    def test_list_with_marker(self):
+        full_tasks = self.task_repo.list()
+        full_ids = [i.task_id for i in full_tasks]
+        marked_tasks = self.task_repo.list(marker=full_ids[0])
+        actual_ids = [i.task_id for i in marked_tasks]
+        self.assertEqual(actual_ids, full_ids[1:])
+
+    def test_list_with_last_marker(self):
+        tasks = self.task_repo.list()
+        marked_tasks = self.task_repo.list(marker=tasks[-1].task_id)
+        self.assertEqual(len(marked_tasks), 0)
+
+    def test_limited_list(self):
+        limited_tasks = self.task_repo.list(limit=2)
+        self.assertEqual(len(limited_tasks), 2)
+
+    def test_list_with_marker_and_limit(self):
+        full_tasks = self.task_repo.list()
+        full_ids = [i.task_id for i in full_tasks]
+        marked_tasks = self.task_repo.list(marker=full_ids[0], limit=1)
+        actual_ids = [i.task_id for i in marked_tasks]
+        self.assertEqual(actual_ids, full_ids[1:2])
+
+    def test_sorted_list(self):
+        tasks = self.task_repo.list(sort_key='status', sort_dir='desc')
+        task_ids = [i.task_id for i in tasks]
+        self.assertEqual([UUID2, UUID1, UUID3], task_ids)
+
+    def test_add_task(self):
+        request = unit_test_utils.get_fake_request(USER1, TENANT1)
+        gateway = unit_test_utils.FakeGateway()
+        task_values = {'type': 'import', 'input': '{"loc": "http://a/b.img"}'}
+        task = self.task_factory.new_task(request.context,
+                                          task_values,
+                                          gateway)
+        self.assertEqual(task.updated_at, task.created_at)
+        self.task_repo.add(task)
+        retreived_task = self.task_repo.get(task.task_id)
+        self.assertEqual(retreived_task.updated_at, task.updated_at)
+
+    def test_add_task_with_wrong_type(self):
+        request = unit_test_utils.get_fake_request(USER1, TENANT1)
+        gateway = unit_test_utils.FakeGateway()
+        task_values = {'type': 'fake', 'status': 'pending', 'input': 'fake'}
+        self.assertRaises(exception.InvalidTaskType,
+                          self.task_factory.new_task,
+                          request.context,
+                          task_values,
+                          gateway)
+
+    def test_save_task(self):
+        task = self.task_repo.get(UUID1)
+        original_update_time = task.updated_at
+        self.task_repo.save(task)
+        current_update_time = task.updated_at
+        self.assertTrue(current_update_time > original_update_time)
+        task = self.task_repo.get(UUID1)
+        self.assertEqual(task.updated_at, current_update_time)
+
+    def test_remove_task(self):
+        task = self.task_repo.get(UUID1)
+        previous_update_time = task.updated_at
+        self.task_repo.remove(task)
+        self.assertTrue(task.updated_at > previous_update_time)
+        self.assertRaises(exception.NotFound, self.task_repo.get, UUID1)

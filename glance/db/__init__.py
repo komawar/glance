@@ -4,6 +4,7 @@
 # Administrator of the National Aeronautics and Space Administration.
 # Copyright 2010-2012 OpenStack LLC.
 # All Rights Reserved.
+# Copyright 2013 IBM Corp.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -286,3 +287,87 @@ class ThreadPoolWrapper(object):
             output = tpool.execute(original, *args, **kwargs)
             return output
         return wrapper
+
+
+class TaskRepo(object):
+
+    def _format_task_from_db(self, db_task):
+        return glance.domain.Task(
+            task_id=db_task['id'],
+            type=db_task['type'],
+            status=db_task['status'],
+            input=db_task['input'],
+            result=db_task['result'],
+            owner=db_task['owner'],
+            message=db_task['message'],
+            expires_at=db_task['expires_at'],
+            created_at=db_task['created_at'],
+            updated_at=db_task['updated_at']
+        )
+
+    def _format_task_to_db(self, task):
+        task = {'id': task.task_id,
+                'type': task.type,
+                'status': task.status,
+                'input': task.input,
+                'result': task.result,
+                'owner': task.owner,
+                'message': task.message,
+                'expires_at': task.expires_at,
+                'created_at': task.created_at,
+                'updated_at': task.updated_at}
+        return task
+
+    def __init__(self, context, db_api):
+        self.context = context
+        self.db_api = db_api
+
+    def get(self, task_id):
+        try:
+            db_api_task = self.db_api.task_get(self.context, task_id)
+            if not db_api_task:
+                raise exception.NotFound()
+        except (exception.NotFound, exception.Forbidden):
+            raise exception.NotFound()
+        return self._format_task_from_db(db_api_task)
+
+    def list(self, marker=None, limit=None, sort_key='created_at',
+             sort_dir='desc', filters=None):
+        db_api_tasks = self.db_api.task_get_all(self.context,
+                                                filters=filters,
+                                                marker=marker,
+                                                limit=limit,
+                                                sort_key=sort_key,
+                                                sort_dir=sort_dir)
+        tasks = [self._format_task_from_db(task) for task in db_api_tasks]
+        return tasks
+
+    def save(self, task):
+        task_values = self._format_task_to_db(task)
+        try:
+            new_values = self.db_api.task_update(self.context,
+                                                 task.task_id,
+                                                 task_values)
+        except (exception.NotFound, exception.Forbidden):
+            raise exception.NotFound()
+
+        task.updated_at = new_values['updated_at']
+
+    def kill(self, task_id):
+        pass
+
+    def add(self, task):
+        task_values = self._format_task_to_db(task)
+        new_values = self.db_api.task_create(self.context, task_values)
+        task.created_at = new_values['created_at']
+        task.updated_at = new_values['updated_at']
+        return self._format_task_from_db(new_values)
+
+    def remove(self, task):
+        task_values = self._format_task_to_db(task)
+        try:
+            self.db_api.task_update(self.context, task.task_id, task_values)
+        except (exception.NotFound, exception.Forbidden):
+            raise exception.NotFound(task_id=task.task_id)
+        new_values = self.db_api.task_delete(self.context, task.task_id)
+        task.updated_at = new_values['updated_at']

@@ -1,5 +1,6 @@
 # Copyright 2012 OpenStack Foundation
 # All Rights Reserved.
+# Copyright 2013 IBM Corp.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -96,3 +97,11 @@ class TestSqlAlchemyDBDataIntegrity(base.TestDriver):
                        fake_paginate_query)
         images = self.db_api.image_get_all(self.context,
                                            sort_key='name')
+
+
+class TestSqlAlchemyTask(base.DriverTaskTests):
+
+    def setUp(self):
+        db_tests.load(get_db, reset_db)
+        super(TestSqlAlchemyTask, self).setUp()
+        self.addCleanup(db_tests.reset)

@@ -2,6 +2,7 @@
 
 # Copyright 2011 OpenStack, LLC
 # All Rights Reserved.
+# Copyright 2013 IBM Corp.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -26,6 +27,7 @@ from glance.common import exception
 import glance.domain
 from glance.openstack.common import timeutils
 from glance.tests import utils
+from glance.tests.unit import utils as unittest_utils
 
 
 TENANT1 = '6838eb7b-6ded-434a-882c-b344c77fe8df'
@@ -857,3 +859,119 @@ class TestImageRepoProxy(utils.BaseTestCase):
                           setattr, images[1], 'name', 'Wally')
         self.assertRaises(exception.Forbidden,
                           setattr, images[2], 'name', 'Calvin')
+
+
+class TestImmutableTask(utils.BaseTestCase):
+    def setUp(self):
+        super(TestImmutableTask, self).setUp()
+        task_factory = glance.domain.TaskFactory()
+        self.context = glance.context.RequestContext(tenant=TENANT1)
+        task_values = {'type': 'import', 'input': '{"loc": "fake"}'}
+        request = unittest_utils.get_fake_request(tenant=TENANT2)
+        task = task_factory.new_task(
+                context=request.context,
+                task=task_values,
+                gateway=unittest_utils.FakeGateway()
+        )
+        self.task = authorization.ImmutableTaskProxy(task)
+
+    def _test_change(self, attr, value):
+        self.assertRaises(exception.Forbidden,
+                          setattr, self.task, attr, value)
+        self.assertRaises(exception.Forbidden,
+                          delattr, self.task, attr)
+
+    def test_change_id(self):
+        self._test_change('task_id', UUID2)
+
+    def test_change_name(self):
+        self._test_change('type', 'fake')
+
+    def test_change_owner(self):
+        self._test_change('input', 'fake')
+
+
+class TestTaskFactoryProxy(utils.BaseTestCase):
+    def setUp(self):
+        super(TestTaskFactoryProxy, self).setUp()
+        factory = glance.domain.TaskFactory()
+        self.context = glance.context.RequestContext(tenant=TENANT1)
+        self.task_factory = authorization.TaskFactoryProxy(factory,
+                                                           self.context)
+        self.task_values = {'type': 'import', 'input': '{"loc": "fake"}'}
+        self.request1 = unittest_utils.get_fake_request(tenant=TENANT1)
+        self.request2 = unittest_utils.get_fake_request(tenant=TENANT2)
+        self.gateway = unittest_utils.FakeGateway()
+
+    def test_default_owner_is_set(self):
+        task = self.task_factory.new_task(self.request1.context,
+                                          self.task_values,
+                                          self.gateway)
+        self.assertEqual(task.owner, TENANT1)
+
+    def test_wrong_owner_cannot_be_set(self):
+        values = {'type': 'import', 'input': '{"loc": "fake"}',
+                  'owner': 'foo'}
+        self.assertRaises(exception.Forbidden,
+                          self.task_factory.new_task,
+                          self.request1.context,
+                          values,
+                          self.gateway)
+
+    def test_admin_can_set_any_owner(self):
+        self.context.is_admin = True
+        task = self.task_factory.new_task(self.request2.context,
+                                          self.task_values,
+                                          self.gateway)
+        self.assertEqual(task.owner, TENANT2)
+
+
+class TestTaskRepoProxy(utils.BaseTestCase):
+
+    class TaskRepoStub(object):
+        def __init__(self, fixtures):
+            self.fixtures = fixtures
+
+        def get(self, task_id):
+            for f in self.fixtures:
+                if f.task_id == task_id:
+                    return f
+            else:
+                raise ValueError(task_id)
+
+        def list(self, *args, **kwargs):
+            return self.fixtures
+
+    def setUp(self):
+        super(TestTaskRepoProxy, self).setUp()
+        task_factory = glance.domain.TaskFactory()
+        task_values = {'type': 'import', 'input': '{"loc": "fake"}'}
+        request1 = unittest_utils.get_fake_request(tenant=TENANT1)
+        request2 = unittest_utils.get_fake_request(tenant=TENANT2)
+        gateway = unittest_utils.FakeGateway()
+        self.fixtures = [
+            task_factory.new_task(request1.context, task_values, gateway),
+            task_factory.new_task(request2.context, task_values, gateway),
+            task_factory.new_task(request2.context, task_values, gateway),
+        ]
+        self.context = glance.context.RequestContext(tenant=TENANT1)
+        task_repo = self.TaskRepoStub(self.fixtures)
+        self.task_repo = authorization.TaskRepoProxy(task_repo,
+                                                     self.context)
+
+    def test_get_mutable_task(self):
+        task = self.task_repo.get(self.fixtures[0].task_id)
+        self.assertEqual(task.task_id, self.fixtures[0].task_id)
+
+    def test_get_immutable_task(self):
+        task = self.task_repo.get(self.fixtures[1].task_id)
+        self.assertRaises(exception.Forbidden,
+                          setattr, task, 'input', 'foo')
+
+    def test_list(self):
+        tasks = self.task_repo.list()
+        self.assertEqual(tasks[0].task_id, self.fixtures[0].task_id)
+        self.assertRaises(exception.Forbidden,
+                          setattr, tasks[1], 'input', 'foo')
+        self.assertRaises(exception.Forbidden,
+                          setattr, tasks[2], 'input', 'foo')

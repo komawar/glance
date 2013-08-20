@@ -1,5 +1,6 @@
 # Copyright 2012 OpenStack Foundation
 # All Rights Reserved.
+# Copyright 2013 IBM Corp.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
 #    not use this file except in compliance with the License. You may obtain
@@ -59,4 +60,12 @@ class TestSimpleMembershipVisibility(base.TestMembershipVisibility,
     def setUp(self):
         db_tests.load(get_db, reset_db)
         super(TestSimpleMembershipVisibility, self).setUp()
+        self.addCleanup(db_tests.reset)
+
+
+class TestSimpleTask(base.DriverTaskTests):
+
+    def setUp(self):
+        db_tests.load(get_db, reset_db)
+        super(TestSimpleTask, self).setUp()
         self.addCleanup(db_tests.reset)
