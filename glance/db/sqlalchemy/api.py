@@ -1111,6 +1111,7 @@ def user_get_storage_usage(context, owner_id, image_id=None, session=None):
         owner_id, session, image_id=image_id)
     return total_size
 
+
 def task_create(context, values, session=None):
     """Create a task object"""
     task_ref = models.Task()
