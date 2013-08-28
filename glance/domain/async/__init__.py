@@ -19,7 +19,7 @@ from glance.openstack.common import uuidutils
 LOG = logging.getLogger(__name__)
 
 async_worker_opts = [ 
-    cfg.StrOpt('async_processor_class',
+    cfg.StrOpt('async_processor_import_class',
                default='glance.domain.async.eventlet_executor.'
                        'AsyncProcessor',
                help=_('Simple Eventlet based async processor class')),
@@ -37,7 +37,7 @@ class Task(object):
         self.task_id = task_id
         self.request = request
         self.parameters = parameters
-        #self.result = result
+        self.result = result
         self._status = status
         self.message = message
         self.created_at = created_at
@@ -92,10 +92,9 @@ class TaskFactory(object):
 
 class TaskRunnerInterface(object):
     def __init__(self, task):
+        processor_map = {'import': 'glance.domain.async.import_processor'}
         if not async_processor:
-           async_processor = importutils.import_object(
-               CONF.async_processor_class)
-        self.async_processor = async_processor
+           self.processor = importutils.import_object(processor_map[task.type])
         self.task = task
 
     def run(self):
