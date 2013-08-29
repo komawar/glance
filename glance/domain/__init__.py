@@ -1,4 +1,4 @@
-# Copyright 2012 OpenStack Foundation
+# Copyright 2013 OpenStack Foundation
 # All Rights Reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -192,7 +192,7 @@ class ImageMemberFactory(object):
 
 class Task(object):
     def __init__(self, task_id, type, status, input, result, owner, message,
-                 expires_at, created_at, updated_at, runner=None):
+                 expires_at, created_at, updated_at, executor=None):
         if type not in ('import'):
             raise exception.InvalidTaskType(type)
 
@@ -208,7 +208,7 @@ class Task(object):
         self.expires_at = expires_at
         self.created_at = created_at
         self.updated_at = updated_at
-        self._runner = runner
+        self._executor = executor
 
     @property
     def status(self):
@@ -216,7 +216,7 @@ class Task(object):
 
     def run(self):
         self._status = 'processing'
-        self._runner.run(self)
+        self._executor.run(self)
 
     def kill(self, message=None):
         pass
@@ -246,14 +246,23 @@ class TaskFactory(object):
         expires_at = None  # depends on the expire policy ???
         created_at = timeutils.utcnow()
         updated_at = created_at
-        runner = TaskRunnerInterface()
+        executor = TaskExecutorFactory().new_task_executor(request, task)
         return Task(task_id, type, status, input, result, owner, message,
-                    expires_at, created_at, updated_at, runner)
+                    expires_at, created_at, updated_at, executor)
 
 
-class TaskRunnerInterface(object):
-    def run(self, task):
-        pass
+class TaskExecutorInterface(object):
+    def __init__(self, request, task):
+        self.request = request
+        self.task = task
 
-    def kill(self, task):
-        pass
+    def run(self):
+        raise NotImplementedError("This is meant to be an abstract class")
+
+
+class TaskExecutorFactory(object):
+    def new_task_executor(self, request, task):
+       if task.type == 'import':
+           return TaskImportExecutor(request, task)
+
+       raise exception.InvalidTaskType(type=task.type)
