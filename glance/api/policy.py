@@ -352,8 +352,8 @@ class TaskProxy(glance.domain.proxy.Task):
         self.policy = policy
         super(TaskProxy, self).__init__(task)
 
-    def run(self, task_proxy):
-        self.base.run(task_proxy)
+    def run(self, executor):
+        self.base.run(executor)
 
     def kill(self):
         self.policy.enforce(self.context, 'delete_task', {})

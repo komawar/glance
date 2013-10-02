@@ -295,7 +295,7 @@ class TestTaskFactory(test_utils.BaseTestCase):
                        }
         request = unittest_utils.get_fake_request()
         gateway = unittest_utils.FakeGateway()
-        task = self.task_factory.new_task(request=request,
+        task = self.task_factory.new_task(context=request.context,
                                           task_dict=task_values,
                                           gateway=gateway)
         self.assertTrue(task.task_id is not None)
@@ -317,8 +317,9 @@ class TestTask(test_utils.BaseTestCase):
             'owner': TENANT1
         }
         self.request = unittest_utils.get_fake_request()
+        self.context = self.request.context
         self.gateway = unittest_utils.FakeGateway()
-        self.task = self.task_factory.new_task(request=self.request,
+        self.task = self.task_factory.new_task(context=self.context,
                                                task_dict=self.task_values,
                                                gateway=self.gateway)
 
@@ -326,11 +327,11 @@ class TestTask(test_utils.BaseTestCase):
         with mock.patch.object(domain.TaskExecutorFactory,
                                'new_task_executor') as mock_new_task_executor:
             mock_new_task_executor.return_value = None
-            task = self.task_factory.new_task(request=self.request,
+            task = self.task_factory.new_task(context=self.context,
                                               task_dict=self.task_values,
                                               gateway=self.gateway)
 
-            self.assertEquals(task.run(task_proxy=object()), None)
+            self.assertEquals(task.run(executor=mock_new_task_executor), None)
 
     def test_complete(self):
         self.task.complete('{"Target": "file://home"}')
@@ -346,24 +347,25 @@ class TestTaskExecutorFactory(test_utils.BaseTestCase):
     def setUp(self):
         super(TestTaskExecutorFactory, self).setUp()
         self.request = unit_utils.get_fake_request()
+        self.context = self.request.context
         self.executor_factory = domain.TaskExecutorFactory()
         self.fake_gateway = unittest_utils.FakeGateway()
 
     def test_new_task_executor_task_type_import(self):
         task_dict = {'type': 'import'}
 
-        executor = self.executor_factory.new_task_executor(self.request,
+        executor = self.executor_factory.new_task_executor(self.context,
                                                            task_dict,
                                                            self.fake_gateway)
 
         self.assertTrue(isinstance(executor,
                         import_executor.TaskImportExecutor))
-        self.assertEqual(executor.request, self.request)
+        self.assertEqual(executor.context, self.context)
 
     def test_new_task_executor_invalid_task_type(self):
         task_dict = {'type': 'invalid'}
 
         executor = self.executor_factory.new_task_executor
 
-        self.assertRaises(exception.InvalidTaskType, executor, self.request,
+        self.assertRaises(exception.InvalidTaskType, executor, self.context,
                           task_dict, self.fake_gateway)

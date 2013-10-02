@@ -222,7 +222,7 @@ class ImageMemberFactory(object):
 
 class Task(object):
     def __init__(self, task_id, type, status, input, result, owner, message,
-                 expires_at, created_at, updated_at, executor=None):
+                 expires_at, created_at, updated_at):
         if type not in ('import', 'export', 'clone'):
             raise exception.InvalidTaskType(type)
 
@@ -239,17 +239,16 @@ class Task(object):
         self.expires_at = expires_at
         self.created_at = created_at
         self.updated_at = updated_at
-        self._executor = executor
 
     @property
     def status(self):
         return self._status
 
-    def run(self, task_proxy):
+    def run(self, executor):
         # NOTE (flwang) The task status won't be set here but handled by the
         # executor.
-        if self._executor:
-            self._executor.run(self)
+        if executor:
+            executor.run(self)
 
     def kill(self, message=None):
         raise NotImplementedError()
@@ -264,12 +263,9 @@ class Task(object):
 
 
 class TaskFactory(object):
-    def _get_executor(self, request, task_dict, gateway):
-        return TaskExecutorFactory().new_task_executor(request, task_dict,
-                                                       gateway)
 
-    def new_task(self, request, task_dict, gateway):
-        if request is None:
+    def new_task(self, context, task_dict, gateway):
+        if context is None:
             raise ValueError('request can not be None')
 
         task_id = uuidutils.generate_uuid()
@@ -277,19 +273,18 @@ class TaskFactory(object):
         status = 'pending'
         input = task_dict['input']
         result = None
-        owner = request.context.owner or task_dict['owner']
+        owner = context.owner or task_dict['owner']
         message = None
         expires_at = None  # NOTE (flwang) Depends on the expire policy
         created_at = timeutils.utcnow()
         updated_at = created_at
-        executor = self._get_executor(request, task_dict, gateway)
         return Task(task_id, type, status, input, result, owner, message,
-                    expires_at, created_at, updated_at, executor)
+                    expires_at, created_at, updated_at)
 
 
 class TaskExecutorFactory(object):
-    def new_task_executor(self, request, task_dict, gateway):
+    def new_task_executor(self, context, task_dict, gateway):
         if task_dict['type'] == 'import':
-            return import_executor.TaskImportExecutor(request, gateway)
+            return import_executor.TaskImportExecutor(context, gateway)
 
         raise exception.InvalidTaskType(type=task_dict['type'])

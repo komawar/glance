@@ -55,13 +55,16 @@ class TasksController(object):
                                               self.notifier, self.policy)
 
     @utils.mutating
-    def create(self, req, task):
+    def create(self, req, task_dict):
         task_factory = self.gateway.get_task_factory(req.context)
         task_repo = self.gateway.get_task_repo(req.context)
         try:
-            task = task_factory.new_task(req, task, self.gateway)
+            task = task_factory.new_task(req.context, task_dict, self.gateway)
             task_repo.add(task)
-            task.run(task)
+            executor = self.gateway.get_task_executor_factory(req.context,
+                                                              task_dict,
+                                                              self.gateway)
+            task.run(executor)
         except exception.Forbidden as e:
             raise webob.exc.HTTPForbidden(explanation=unicode(e))
 
@@ -192,7 +195,7 @@ class RequestDeserializer(wsgi.JSONRequestDeserializer):
                 task[key] = properties.pop(key)
             except KeyError:
                 pass
-        return dict(task=task)
+        return dict(task_dict=task)
 
     def index(self, request):
         params = request.params.copy()

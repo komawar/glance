@@ -150,8 +150,8 @@ class Task(object):
     created_at = _proxy('base', 'created_at')
     updated_at = _proxy('base', 'updated_at')
 
-    def run(self, task_proxy):
-        self.base.run(self)
+    def run(self, executor):
+        self.base.run(executor)
 
     def kill(self):
         raise NotImplementedError()

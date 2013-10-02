@@ -561,7 +561,9 @@ class TestTaskRepo(test_utils.BaseTestCase):
         request = unit_test_utils.get_fake_request(USER1, TENANT1)
         gateway = unit_test_utils.FakeGateway()
         task_values = {'type': 'import', 'input': '{"loc": "http://a/b.img"}'}
-        task = self.task_factory.new_task(request, task_values, gateway)
+        task = self.task_factory.new_task(request.context,
+                                          task_values,
+                                          gateway)
         self.assertEqual(task.updated_at, task.created_at)
         self.task_repo.add(task)
         retreived_task = self.task_repo.get(task.task_id)
@@ -573,7 +575,9 @@ class TestTaskRepo(test_utils.BaseTestCase):
         task_values = {'type': 'fake', 'status': 'pending', 'input': 'fake'}
         self.assertRaises(exception.InvalidTaskType,
                           self.task_factory.new_task,
-                          request, task_values, gateway)
+                          request.context,
+                          task_values,
+                          gateway)
 
     def test_save_task(self):
         task = self.task_repo.get(UUID1)

@@ -867,8 +867,9 @@ class TestImmutableTask(utils.BaseTestCase):
         task_factory = glance.domain.TaskFactory()
         self.context = glance.context.RequestContext(tenant=TENANT1)
         task_values = {'type': 'import', 'input': '{"loc": "fake"}'}
+        request = unittest_utils.get_fake_request(tenant=TENANT2)
         task = task_factory.new_task(
-                request=unittest_utils.get_fake_request(tenant=TENANT2),
+                context=request.context,
                 task_dict=task_values,
                 gateway=unittest_utils.FakeGateway()
         )
@@ -903,7 +904,8 @@ class TestTaskFactoryProxy(utils.BaseTestCase):
         self.gateway = unittest_utils.FakeGateway()
 
     def test_default_owner_is_set(self):
-        task = self.task_factory.new_task(self.request1, self.task_values,
+        task = self.task_factory.new_task(self.request1.context,
+                                          self.task_values,
                                           self.gateway)
         self.assertEqual(task.owner, TENANT1)
 
@@ -911,12 +913,15 @@ class TestTaskFactoryProxy(utils.BaseTestCase):
         values = {'type': 'import', 'input': '{"loc": "fake"}',
                   'owner': 'foo'}
         self.assertRaises(exception.Forbidden,
-                          self.task_factory.new_task, self.request1, values,
+                          self.task_factory.new_task,
+                          self.request1.context,
+                          values,
                           self.gateway)
 
     def test_admin_can_set_any_owner(self):
         self.context.is_admin = True
-        task = self.task_factory.new_task(self.request2, self.task_values,
+        task = self.task_factory.new_task(self.request2.context,
+                                          self.task_values,
                                           self.gateway)
         self.assertEqual(task.owner, TENANT2)
 
@@ -945,9 +950,9 @@ class TestTaskRepoProxy(utils.BaseTestCase):
         request2 = unittest_utils.get_fake_request(tenant=TENANT2)
         gateway = unittest_utils.FakeGateway()
         self.fixtures = [
-            task_factory.new_task(request1, task_values, gateway),
-            task_factory.new_task(request2, task_values, gateway),
-            task_factory.new_task(request2, task_values, gateway),
+            task_factory.new_task(request1.context, task_values, gateway),
+            task_factory.new_task(request2.context, task_values, gateway),
+            task_factory.new_task(request2.context, task_values, gateway),
         ]
         self.context = glance.context.RequestContext(tenant=TENANT1)
         task_repo = self.TaskRepoStub(self.fixtures)

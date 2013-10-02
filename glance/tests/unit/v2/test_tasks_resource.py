@@ -274,7 +274,7 @@ class TestTasksController(test_utils.BaseTestCase):
             "import_from": "swift://cloud.foo/myaccount/mycontainer/path",
             "image_from_format": "qcow2"}
         }
-        output = self.controller.create(request, task=task)
+        output = self.controller.create(request, task_dict=task)
         self.assertEqual('import', output.type)
         self.assertEqual({
             "import_from": "swift://cloud.foo/myaccount/mycontainer/path",
@@ -357,7 +357,7 @@ class TestTasksDeserializer(test_utils.BaseTestCase):
                       'image_from_format': 'qcow2'},
         }
         self.maxDiff = None
-        expected = {'task': properties}
+        expected = {'task_dict': properties}
         self.assertEqual(expected, output)
 
     def test_index(self):

@@ -15,8 +15,8 @@
 
 
 class TaskExecutorInterface(object):
-    def __init__(self, request, gateway=None):
-        self.request = request
+    def __init__(self, context, gateway=None):
+        self.context = context
         self.gateway = gateway
 
     def run(self, task):

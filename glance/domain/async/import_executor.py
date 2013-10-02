@@ -29,14 +29,14 @@ class TaskImportExecutor(async.TaskExecutorInterface):
 
     def execute(self, task):
         #TODO unpack json input in task, catch exceptions and set task message
-        task_repo = self.gateway.get_db_task_repo(self.request.context)
+        task_repo = self.gateway.get_db_task_repo(self.context)
         try:
             input = self.unpack_task_input(task)
             image = self.create_image(input.get('image_properties'))
             uri = self.check_valid_location(input)
 
             self.set_image_data(image, uri)
-            image_repo = self.gateway.get_repo(self.request.context)
+            image_repo = self.gateway.get_repo(self.context)
             image_id = image.image_id
             image = image_repo.get(image_id)
             image_repo.save(image)
@@ -71,8 +71,8 @@ class TaskImportExecutor(async.TaskExecutorInterface):
                             'disk_format', 'id', 'min_disk', 'min_ram',
                             'name', 'size', 'status', 'tags', 'updated_at',
                             'visibility', 'protected']
-        image_factory = self.gateway.get_image_factory(self.request.context)
-        image_repo = self.gateway.get_repo(self.request.context)
+        image_factory = self.gateway.get_image_factory(self.context)
+        image_repo = self.gateway.get_repo(self.context)
 
         image = {}
         properties = image_properties
@@ -110,5 +110,5 @@ class TaskImportExecutor(async.TaskExecutorInterface):
 
     def set_task_status(self, task):
         task._status = 'success'
-        task_repo = self.gateway.get_db_task_repo(self.request.context)
+        task_repo = self.gateway.get_db_task_repo(self.context)
         task_repo.save(task)

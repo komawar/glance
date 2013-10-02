@@ -109,3 +109,8 @@ class Gateway(object):
 
     def get_db_task_repo(self, context):
         return glance.db.TaskRepo(context, self.db_api)
+
+    def get_task_executor_factory(self, context, task_dict, gateway):
+        return glance.domain.TaskExecutorFactory().new_task_executor(context,
+                                                                     task_dict,
+                                                                     gateway)
