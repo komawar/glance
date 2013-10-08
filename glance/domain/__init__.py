@@ -20,7 +20,7 @@ from oslo.config import cfg
 from glance.common import exception
 from glance.openstack.common import timeutils
 from glance.openstack.common import uuidutils
-from glance.domain.async import import_executor
+from glance.domain.async import eventlet_task_executor
 
 
 image_format_opts = [
@@ -285,6 +285,6 @@ class TaskFactory(object):
 class TaskExecutorFactory(object):
     def new_task_executor(self, context, task, gateway):
         if task['type'] == 'import':
-            return import_executor.TaskImportExecutor(context, gateway)
+            return eventlet_task_executor.EventletTaskExecutor(context, gateway)
 
         raise exception.InvalidTaskType(type=task['type'])

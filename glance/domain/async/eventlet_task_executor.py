@@ -13,21 +13,38 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+
 import eventlet
 
 from glance.domain import async
 from glance.openstack.common import log as logging, importutils
 from glance.openstack.common.gettextutils import _
+from oslo.config import cfg
 
 
 LOG = logging.getLogger(__name__)
 
+task_script_opts = [
+    cfg.StrOpt('import_task_script',
+               default='glance.common.scripts.DefaultScript',
+               help=_('Default import script.')),
+    cfg.StrOpt('export_task_script',
+               default='glance.common.scripts.DefaultScript',
+               help=_('Default export script.')),
+    cfg.StrOpt('clone_task_script',
+               default='glance.common.scripts.DefaultScript',
+               help=_('Default clone script.')),
+]
 
-class TaskImportExecutor(async.TaskExecutorInterface):
+CONF = cfg.CONF
+CONF.register_opts(task_script_opts)
+
+
+class EventletTaskExecutor(async.TaskExecutorInterface):
 
     def load_script(self):
-        script_class = 'glance.common.scripts.' \
-                       'import_filesystem_to_filesystem.ImportScript'
+
+        script_class = CONF.import_task_script
         script = importutils.import_object(script_class,
                                            self.gateway,
                                            self.context)

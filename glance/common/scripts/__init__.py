@@ -12,3 +12,16 @@
 #    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 #    License for the specific language governing permissions and limitations
 #    under the License.
+
+from glance.openstack.common import log as logging
+
+LOG = logging.getLogger(__name__)
+
+class DefaultScript(object):
+
+    def __init__(self, gateway, context):
+        self.gateway = gateway
+        self.context = context
+
+    def execute(self, task_id):
+        LOG.warn(_("Warning! This is a dummy script."))
