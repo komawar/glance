@@ -370,6 +370,7 @@ enable_v2_api = %(enable_v2_api)s
 lock_path = %(lock_path)s
 enable_v2_api= %(enable_v2_api)s
 property_protection_file = %(property_protection_file)s
+import_task_script = glance.common.scripts.import_filesystem_to_filesystem.ImportScript
 [paste_deploy]
 flavor = %(deployment_flavor)s
 """
