@@ -107,7 +107,5 @@ class Gateway(object):
             notifier_task_repo, context)
         return authorized_task_repo
 
-    def get_task_executor_factory(self, context, task, gateway):
-        return glance.domain.TaskExecutorFactory().new_task_executor(context,
-                                                                     task,
-                                                                     gateway)
+    def get_task_executor_factory(self):
+        return glance.domain.TaskExecutorFactory()

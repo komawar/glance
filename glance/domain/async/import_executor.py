@@ -23,7 +23,7 @@ from glance.openstack.common.gettextutils import _
 LOG = logging.getLogger(__name__)
 
 
-class TaskImportExecutor(async.TaskExecutorInterface):
+class TaskEventletExecutor(async.TaskExecutorInterface):
 
     def load_script(self):
         script_class = 'glance.common.scripts.' \
@@ -34,6 +34,11 @@ class TaskImportExecutor(async.TaskExecutorInterface):
         return script
 
     def run(self, task_id):
+        if task['type'] == 'import':
+            return import_executor.TaskImportExecutor(context, gateway)
+
+        raise exception.InvalidTaskType(type=task['type'])
+
         msg = _("Running task '%(task_id)s'") % {'task_id': task_id}
         LOG.info(msg)
         script = self.load_script()

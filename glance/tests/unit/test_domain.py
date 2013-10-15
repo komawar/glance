@@ -359,7 +359,7 @@ class TestTaskExecutorFactory(test_utils.BaseTestCase):
                                                            self.fake_gateway)
 
         self.assertTrue(isinstance(executor,
-                        import_executor.TaskImportExecutor))
+                        import_executor.TaskEventletExecutor))
         self.assertEqual(executor.context, self.context)
 
     def test_new_task_executor_invalid_task_type(self):

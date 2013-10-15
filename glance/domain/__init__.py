@@ -18,7 +18,7 @@ import collections
 from oslo.config import cfg
 
 from glance.common import exception
-from glance.openstack.common import timeutils
+from glance.openstack.common import timeutils, importutils
 from glance.openstack.common import uuidutils
 from glance.domain.async import import_executor
 
@@ -35,9 +35,15 @@ image_format_opts = [
                        "image attribute")),
 ]
 
+task_executor_opts = [
+    cfg.StrOpt('task_executor_type',
+               default='glance.domain.async.TaskEventletExecutor',
+               help=_("Task executor type")),
+]
 
 CONF = cfg.CONF
 CONF.register_opts(image_format_opts)
+CONF.register_opts(task_executor_opts)
 
 
 class ImageFactory(object):
@@ -284,7 +290,5 @@ class TaskFactory(object):
 
 class TaskExecutorFactory(object):
     def new_task_executor(self, context, task, gateway):
-        if task['type'] == 'import':
-            return import_executor.TaskImportExecutor(context, gateway)
-
-        raise exception.InvalidTaskType(type=task['type'])
+        task_executor = CONF.task_executor_type
+        return importutils.import_object(task_executor, context, task, gateway)

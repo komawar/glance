@@ -57,14 +57,15 @@ class TasksController(object):
     @utils.mutating
     def create(self, req, task):
         task_factory = self.gateway.get_task_factory(req.context)
+        executor_factory = self.gateway.get_task_executor_factory()
         task_repo = self.gateway.get_task_repo(req.context)
         try:
             new_task = task_factory.new_task(req.context, task, self.gateway)
             task_repo.add(new_task)
-            executor = self.gateway.get_task_executor_factory(req.context,
-                                                              task,
-                                                              self.gateway)
-            new_task.run(executor)
+            task_executor = executor_factory.new_task_executor(req.context,
+                                                               task,
+                                                               self.gateway)
+            new_task.run(task_executor)
         except exception.Forbidden as e:
             raise webob.exc.HTTPForbidden(explanation=unicode(e))
 
