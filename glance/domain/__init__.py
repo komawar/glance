@@ -20,7 +20,7 @@ from oslo.config import cfg
 from glance.common import exception
 from glance.openstack.common import timeutils, importutils
 from glance.openstack.common import uuidutils
-from glance.domain.async import import_executor
+from glance.domain.async import eventlet_executor
 
 
 image_format_opts = [
@@ -37,7 +37,8 @@ image_format_opts = [
 
 task_executor_opts = [
     cfg.StrOpt('task_executor_type',
-               default='glance.domain.async.TaskEventletExecutor',
+               default='glance.domain.async.'
+                       'eventlet_executor.TaskEventletExecutor',
                help=_("Task executor type")),
 ]
 
@@ -254,7 +255,7 @@ class Task(object):
         # NOTE (flwang) The task status won't be set here but handled by the
         # executor.
         if executor:
-            executor.run(self.task_id)
+            executor.run(self.task_id, self.status, self.type, self.input)
 
     def kill(self, message=None):
         raise NotImplementedError()
@@ -289,6 +290,6 @@ class TaskFactory(object):
 
 
 class TaskExecutorFactory(object):
-    def new_task_executor(self, context, task, gateway):
+    def new_task_executor(self, context, gateway):
         task_executor = CONF.task_executor_type
-        return importutils.import_object(task_executor, context, task, gateway)
+        return importutils.import_object(task_executor, context, gateway)

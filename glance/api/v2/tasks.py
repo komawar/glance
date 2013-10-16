@@ -63,7 +63,6 @@ class TasksController(object):
             new_task = task_factory.new_task(req.context, task, self.gateway)
             task_repo.add(new_task)
             task_executor = executor_factory.new_task_executor(req.context,
-                                                               task,
                                                                self.gateway)
             new_task.run(task_executor)
         except exception.Forbidden as e:

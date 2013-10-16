@@ -16,7 +16,7 @@
 
 from glance.common import exception
 from glance import domain
-from glance.domain.async import import_executor
+from glance.domain.async import eventlet_executor
 import glance.tests.unit.utils as unit_utils
 import glance.tests.utils as test_utils
 import glance.tests.unit.utils as unittest_utils
@@ -351,21 +351,10 @@ class TestTaskExecutorFactory(test_utils.BaseTestCase):
         self.executor_factory = domain.TaskExecutorFactory()
         self.fake_gateway = unittest_utils.FakeGateway()
 
-    def test_new_task_executor_task_type_import(self):
-        task = {'type': 'import'}
-
+    def test_new_task_executor(self):
         executor = self.executor_factory.new_task_executor(self.context,
-                                                           task,
                                                            self.fake_gateway)
 
         self.assertTrue(isinstance(executor,
-                        import_executor.TaskEventletExecutor))
+                        eventlet_executor.TaskEventletExecutor))
         self.assertEqual(executor.context, self.context)
-
-    def test_new_task_executor_invalid_task_type(self):
-        task = {'type': 'invalid'}
-
-        executor = self.executor_factory.new_task_executor
-
-        self.assertRaises(exception.InvalidTaskType, executor, self.context,
-                          task, self.fake_gateway)

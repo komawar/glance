@@ -19,5 +19,5 @@ class TaskExecutorInterface(object):
         self.context = context
         self.gateway = gateway
 
-    def run(self, task):
+    def run(self, task_id, task_status, task_type, task_input):
         raise NotImplementedError("This is meant to be an abstract class")
