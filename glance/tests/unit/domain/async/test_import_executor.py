@@ -19,7 +19,7 @@ import os
 import mock
 
 from glance.common import exception
-from glance.common.scripts import import_filesystem_to_filesystem as \
+from glance.common.scripts.import import import_filesystem_to_filesystem as \
     import_fs_script
 from glance.tests.unit import base
 import glance.tests.unit.utils as unit_utils

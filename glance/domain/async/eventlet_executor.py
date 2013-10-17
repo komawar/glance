@@ -32,8 +32,8 @@ task_type_opts = [
                 ],
                 help=_('List of tasks types supported by the deployment')),
     cfg.StrOpt('import_task_script',
-               default='glance.common.scripts.import_filesystem_to_filesystem.'
-                       'ImportScript',
+               default='glance.common.scripts.import.'
+                       'import_filesystem_to_filesystem.ImportScript',
                help=_('Import task executor script to load'))
 ]
 
