@@ -1182,10 +1182,10 @@ class DriverQuotaTests(test_utils.BaseTestCase):
         self.assertEqual(total, x)
 
 
-class DriverTaskTests(test_utils.BaseTestCase):
+class TaskTests(test_utils.BaseTestCase):
 
     def setUp(self):
-        super(DriverTaskTests, self).setUp()
+        super(TaskTests, self).setUp()
         self.owner_id1 = uuidutils.generate_uuid()
         self.adm_context = context.RequestContext(is_admin=True,
                                                   auth_tok='user:user:admin')
@@ -1233,7 +1233,7 @@ class DriverTaskTests(test_utils.BaseTestCase):
 
     def test_task_get_all_with_filter(self):
         for fixture in self.fixtures:
-            task = self.db_api.task_create(self.context,
+            self.db_api.task_create(self.context,
                                            build_task_fixture(**fixture))
 
         import_tasks = self.db_api.task_get_all(self.context,
@@ -1267,7 +1267,7 @@ class DriverTaskTests(test_utils.BaseTestCase):
 
     def test_task_get_all_limit(self):
         for fixture in self.fixtures:
-            task = self.db_api.task_create(self.context,
+            self.db_api.task_create(self.context,
                                            build_task_fixture(**fixture))
 
         tasks = self.db_api.task_get_all(self.context, limit=2)
@@ -1308,11 +1308,14 @@ class DriverTaskTests(test_utils.BaseTestCase):
 
     def test_task_get(self):
         expires_at = timeutils.utcnow()
+        image_id = uuidutils.generate_uuid()
         fixture = {
             'owner': self.context.owner,
             'type': 'import',
             'status': 'pending',
             'input': '{"loc": "fake"}',
+            'result': "{'image_id': %s}" % image_id,
+            'message': 'blah',
             'expires_at': expires_at
         }
 
@@ -1329,7 +1332,62 @@ class DriverTaskTests(test_utils.BaseTestCase):
         self.assertEqual(task['owner'], self.context.owner)
         self.assertEqual(task['type'], 'import')
         self.assertEqual(task['status'], 'pending')
+        self.assertEqual(task['input'], fixture['input'])
+        self.assertEqual(task['result'], fixture['result'])
+        self.assertEqual(task['message'], fixture['message'])
         self.assertEqual(task['expires_at'], expires_at)
+
+    def test_task_get_all(self):
+        expires_at = timeutils.utcnow()
+        image_id = uuidutils.generate_uuid()
+        fixture1 = {
+            'owner': self.context.owner,
+            'type': 'import',
+            'status': 'pending',
+            'input': '{"loc": "fake"}',
+            'result': "{'image_id': %s}" % image_id,
+            'message': 'blah',
+            'expires_at': expires_at
+        }
+
+        fixture2 = {
+            'owner': self.context.owner,
+            'type': 'import',
+            'status': 'pending',
+            'input': '{"loc": "fake"}',
+            'result': "{'image_id': %s}" % image_id,
+            'message': 'blah',
+            'expires_at': expires_at
+        }
+
+        task1 = self.db_api.task_create(self.context, fixture1)
+        task2 = self.db_api.task_create(self.context, fixture2)
+
+        self.assertIsNotNone(task1)
+        self.assertIsNotNone(task2)
+
+        task1_id = task1['id']
+        task2_id = task2['id']
+        tasks = self.db_api.task_get_all(self.context)
+
+        self.assertIsNotNone(tasks)
+        self.assertEqual(set((tasks[0]['id'], tasks[1]['id'])),
+                         set((task1_id, task2_id)))
+        self.assertEqual(tasks[0]['owner'], self.context.owner)
+        self.assertEqual(tasks[0]['type'], 'import')
+        self.assertEqual(tasks[0]['status'], 'pending')
+        self.assertEqual(tasks[0]['input'], fixture1['input'])
+        self.assertEqual(tasks[0]['result'], fixture1['result'])
+        self.assertEqual(tasks[0]['message'], fixture1['message'])
+        self.assertEqual(tasks[0]['expires_at'], expires_at)
+
+        self.assertEqual(tasks[1]['owner'], self.context.owner)
+        self.assertEqual(tasks[1]['type'], 'import')
+        self.assertEqual(tasks[1]['status'], 'pending')
+        self.assertEqual(tasks[1]['input'], fixture2['input'])
+        self.assertEqual(tasks[1]['result'], fixture2['result'])
+        self.assertEqual(tasks[1]['message'], fixture2['message'])
+        self.assertEqual(tasks[1]['expires_at'], expires_at)
 
     def test_task_create(self):
         task_id = uuidutils.generate_uuid()

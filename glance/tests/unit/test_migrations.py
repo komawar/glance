@@ -38,6 +38,7 @@ import urlparse
 from migrate.versioning.repository import Repository
 from oslo.config import cfg
 import sqlalchemy
+from sqlalchemy.exc import NoSuchTableError
 
 from glance.common import crypt
 import glance.db.migration as migration
@@ -1040,3 +1041,78 @@ class TestMigrations(utils.BaseTestCase):
     def _post_downgrade_030(self, engine):
         self.assertRaises(sqlalchemy.exc.NoSuchTableError,
                           get_table, engine, 'tasks')
+
+    def _pre_upgrade_031(self, engine):
+        self.assertRaises(NoSuchTableError, get_table, engine, 'task_info')
+
+        tasks = get_table(engine, 'tasks')
+        now = datetime.datetime.now()
+        base_values = {
+            'deleted': False,
+            'created_at': now,
+            'updated_at': now,
+            'status': 'active',
+            'owner': 'TENANT',
+            'type': 'import',
+        }
+        data = [
+            {
+                'id': 'task-1',
+                'input': 'some input',
+                'message': None,
+                'result': 'successful'
+            },
+            {
+                'id': 'task-2',
+                'input': None,
+                'message': None,
+                'result': None
+            },
+        ]
+        map(lambda task: task.update(base_values), data)
+        for task in data:
+            tasks.insert().values(task).execute()
+        return data
+
+    def _check_031(self, engine, data):
+        task_info_table = get_table(engine, 'task_info')
+
+        records = task_info_table.select().execute().fetchall()
+
+        self.assertEquals(len(records), 2)
+
+        task_info = records[0]
+        self.assertEqual(task_info.task_id, data[0]['id'])
+        self.assertEqual(task_info.input, data[0]['input'])
+        self.assertEqual(task_info.result, data[0]['result'])
+        self.assertIsNone(task_info.message)
+
+        task_info = records[1]
+        self.assertEqual(task_info.task_id, 'task-2')
+        self.assertIsNone(task_info.input)
+        self.assertIsNone(task_info.result)
+        self.assertIsNone(task_info.message)
+
+        tasks_table = get_table(engine, 'tasks')
+        self.assertNotIn('input', tasks_table.c)
+        self.assertNotIn('result', tasks_table.c)
+        self.assertNotIn('message', tasks_table.c)
+
+    def _post_downgrade_031(self, engine):
+        self.assertRaises(NoSuchTableError, get_table, engine, 'task_info')
+
+        tasks_table = get_table(engine, 'tasks')
+        records = tasks_table.select().execute().fetchall()
+        self.assertEquals(len(records), 2)
+
+        tasks = dict([(t.id, t) for t in records])
+
+        task_1 = tasks.get('task-1')
+        self.assertEqual(task_1.input, 'some input')
+        self.assertEqual(task_1.result, 'successful')
+        self.assertIsNone(task_1.message)
+
+        task_2 = tasks.get('task-2')
+        self.assertIsNone(task_2.input)
+        self.assertIsNone(task_2.result)
+        self.assertIsNone(task_2.message)

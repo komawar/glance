@@ -22,6 +22,7 @@
 """
 Defines interface for DB access
 """
+import copy
 
 import logging
 import time
@@ -1164,25 +1165,99 @@ def user_get_storage_usage(context, owner_id, image_id=None, session=None):
     return total_size
 
 
+def _task_info_format(task_info_ref):
+    """Format a task info ref for consumption outside of this module"""
+    if task_info_ref is None:
+        return {}
+    return {
+        'task_id': task_info_ref['task_id'],
+        'input': task_info_ref['input'],
+        'result': task_info_ref['result'],
+        'message': task_info_ref['message'],
+        'created_at': task_info_ref['created_at'],
+        'updated_at': task_info_ref['updated_at']
+    }
+
+
+def _task_info_create(context, task_id, values, session=None):
+    """Create an TaskInfo object"""
+    session = session or _get_session()
+    task_info_values = dict([(k, v)
+                             for k, v in values.iteritems()
+                             if v is not None])
+    if len(task_info_values) > 0:
+        task_info_ref = models.TaskInfo()
+        task_info_ref.task_id = task_id
+        task_info_ref.update(values)
+        task_info_ref.save(session=session)
+    return _task_info_format(task_info_ref)
+
+
+def _task_info_update(context, task_id, values, session=None):
+    """Update an TaskInfo object"""
+    session = session or _get_session()
+    task_info_ref = _task_info_get(context, task_id, session)
+    if task_info_ref:
+        task_info_ref.update(values)
+        task_info_ref.save(session=session)
+    else:
+        _task_info_create(context, task_id, values, session)
+    return _task_info_format(task_info_ref)
+
+
+def _task_info_get(context, task_id, session=None):
+    """Fetch an TaskInfo entity by task_id"""
+    session = session or _get_session()
+    query = session.query(models.TaskInfo)
+    query = query.filter_by(task_id=task_id)
+    try:
+        task_info_ref = query.one()
+    except sa_orm.exc.NoResultFound:
+        task_info_ref = None
+
+    return task_info_ref
+
+
 def task_create(context, values, session=None):
     """Create a task object"""
     task_ref = models.Task()
+    values = copy.deepcopy(values)
+    task_info_values = {
+        'input': values.pop('input', None),
+        'result': values.pop('result', None),
+        'message': values.pop('message', None),
+    }
     _task_update(context, task_ref, values, session=session)
-    return _task_format(task_ref)
+    task_info_ref = _task_info_create(context,
+                                      task_ref.id,
+                                      task_info_values,
+                                      session=session)
+    return _task_format(task_ref, task_info_ref)
 
 
 def task_update(context, task_id, values, session=None):
     """Update a task object"""
     session = session or _get_session()
     task_ref = _task_get(context, task_id, session)
+    task_info_values = {
+        'input': values.pop('input', None),
+        'result': values.pop('result', None),
+        'message': values.pop('message', None),
+    }
+    task_info_ref = _task_info_update(context,
+                                      task_id,
+                                      task_info_values,
+                                      session)
     _task_update(context, task_ref, values, session)
-    return _task_format(task_ref)
+
+    return _task_format(task_ref, task_info_ref)
 
 
 def task_get(context, task_id, session=None):
     """Fetch a task entity by id"""
     task_ref = _task_get(context, task_id, session=session)
-    return _task_format(task_ref)
+    task_info_ref = _task_info_get(context, task_id, session=session)
+    return _task_format(task_ref, task_info_ref)
 
 
 def task_delete(context, task_id, session=None):
@@ -1252,7 +1327,14 @@ def task_get_all(context, filters=None, marker=None, limit=None,
                             marker=marker_task,
                             sort_dir=sort_dir)
 
-    return [_task_format(task) for task in query.all()]
+    task_refs = query.all()
+
+    tasks = []
+    for task_ref in task_refs:
+        task_info_ref = _task_info_get(context, task_ref.id, session)
+        tasks.append(_task_format(task_ref, task_info_ref))
+
+    return tasks
 
 
 def _is_task_visible(context, task):
@@ -1305,19 +1387,26 @@ def _task_update(context, task_ref, values, session=None):
     return task_ref
 
 
-def _task_format(task_ref):
+def _task_format(task_ref, task_info_ref=None):
     """Format a task ref for consumption outside of this module"""
-    return {
+    task_dict = {
         'id': task_ref['id'],
         'type': task_ref['type'],
         'status': task_ref['status'],
-        'input': task_ref['input'],
-        'result': task_ref['result'],
         'owner': task_ref['owner'],
-        'message': task_ref['message'],
         'expires_at': task_ref['expires_at'],
         'created_at': task_ref['created_at'],
         'updated_at': task_ref['updated_at'],
         'deleted_at': task_ref['deleted_at'],
         'deleted': task_ref['deleted']
     }
+
+    if task_info_ref:
+        task_info_dict = {
+            'input': task_info_ref['input'],
+            'result': task_info_ref['result'],
+            'message': task_info_ref['message'],
+        }
+        task_dict.update(task_info_dict)
+
+    return task_dict

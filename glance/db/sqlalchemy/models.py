@@ -28,6 +28,7 @@ from sqlalchemy import ForeignKey, DateTime, Boolean, Text
 from sqlalchemy.orm import relationship, backref, object_mapper
 from sqlalchemy.types import TypeDecorator
 from sqlalchemy import Index, UniqueConstraint
+from sqlalchemy.types import TypeDecorator
 
 from glance.openstack.common import timeutils
 from glance.openstack.common import uuidutils
@@ -67,8 +68,6 @@ class ModelBase(object):
                         nullable=False)
     updated_at = Column(DateTime, default=timeutils.utcnow,
                         nullable=False, onupdate=timeutils.utcnow)
-    deleted_at = Column(DateTime)
-    deleted = Column(Boolean, nullable=False, default=False)
 
     def save(self, session=None):
         """Save this object"""
@@ -77,12 +76,6 @@ class ModelBase(object):
         session = session or db_api._get_session()
         session.add(self)
         session.flush()
-
-    def delete(self, session=None):
-        """Delete this object"""
-        self.deleted = True
-        self.deleted_at = timeutils.utcnow()
-        self.save(session=session)
 
     def update(self, values):
         """dict.update() behaviour."""
@@ -122,7 +115,22 @@ class ModelBase(object):
         return d
 
 
-class Image(BASE, ModelBase):
+class SoftDeleteMixin(object):
+    deleted_at = Column(DateTime)
+    deleted = Column(Boolean, nullable=False, default=False)
+
+    def delete(self, session=None):
+        """Delete this object"""
+        self.deleted = True
+        self.deleted_at = timeutils.utcnow()
+        self.save(session=session)
+
+
+class GlanceBase(SoftDeleteMixin, ModelBase):
+    metadata = None
+
+
+class Image(BASE, GlanceBase):
     """Represents an image in the datastore"""
     __tablename__ = 'images'
     __table_args__ = (Index('checksum_image_idx', 'checksum'),
@@ -144,7 +152,7 @@ class Image(BASE, ModelBase):
     protected = Column(Boolean, nullable=False, default=False)
 
 
-class ImageProperty(BASE, ModelBase):
+class ImageProperty(BASE, GlanceBase):
     """Represents an image properties in the datastore"""
     __tablename__ = 'image_properties'
     __table_args__ = (Index('ix_image_properties_image_id', 'image_id'),
@@ -163,7 +171,7 @@ class ImageProperty(BASE, ModelBase):
     value = Column(Text)
 
 
-class ImageTag(BASE, ModelBase):
+class ImageTag(BASE, GlanceBase):
     """Represents an image tag in the datastore"""
     __tablename__ = 'image_tags'
     __table_args__ = (Index('ix_image_tags_image_id', 'image_id'),
@@ -177,7 +185,7 @@ class ImageTag(BASE, ModelBase):
     value = Column(String(255), nullable=False)
 
 
-class ImageLocation(BASE, ModelBase):
+class ImageLocation(BASE, GlanceBase):
     """Represents an image location in the datastore"""
     __tablename__ = 'image_locations'
     __table_args__ = (Index('ix_image_locations_image_id', 'image_id'),
@@ -190,7 +198,7 @@ class ImageLocation(BASE, ModelBase):
     meta_data = Column(JSONEncodedDict(), default={})
 
 
-class ImageMember(BASE, ModelBase):
+class ImageMember(BASE, GlanceBase):
     """Represents an image members in the datastore"""
     __tablename__ = 'image_members'
     unique_constraint_key_name = 'image_members_image_id_member_deleted_at_key'
@@ -214,7 +222,7 @@ class ImageMember(BASE, ModelBase):
     status = Column(String(20), nullable=False, default="pending")
 
 
-class Task(BASE, ModelBase):
+class Task(BASE, GlanceBase):
     """Represents an task in the datastore"""
     __tablename__ = 'tasks'
     __table_args__ = (Index('ix_tasks_type', 'type'),
@@ -226,11 +234,22 @@ class Task(BASE, ModelBase):
     id = Column(String(36), primary_key=True, default=uuidutils.generate_uuid)
     type = Column(String(30))
     status = Column(String(30))
+    owner = Column(String(255))
+    run_at = Column(DateTime)
+    expires_at = Column(DateTime, nullable=True)
+
+
+class TaskInfo(BASE, ModelBase):
+    """Represents an image members in the datastore"""
+    __tablename__ = 'task_info'
+
+    task_id = Column(String(36), ForeignKey('tasks.id'),
+                     primary_key=True,
+                     nullable=False)
+    task = relationship(Task, backref=backref('info', uselist=False))
     input = Column(JSONEncodedDict())
     result = Column(JSONEncodedDict())
-    owner = Column(String(255))
     message = Column(Text)
-    expires_at = Column(DateTime, nullable=True)
 
 
 def register_models(engine):
