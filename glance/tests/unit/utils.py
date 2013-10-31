@@ -243,6 +243,9 @@ class FakeTask(object):
         self._status = status
         self._executor = None
 
+    def begin_processing(self):
+        self._status = 'processing'
+
     def success(self, result):
         self.result = result
         self._status = 'success'

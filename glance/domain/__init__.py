@@ -21,6 +21,7 @@ from oslo.config import cfg
 
 from glance.common import exception
 import glance.openstack.common.log as logging
+from glance.openstack.common import importutils
 from glance.openstack.common import timeutils
 from glance.openstack.common import uuidutils
 
@@ -286,7 +287,10 @@ class Task(object):
         return self._status
 
     def run(self, executor):
-        pass
+        executor.run(self.task_id,
+                     self.status,
+                     self.type,
+                     self.input)
 
     def _validate_task_status_transition(self, cur_status, new_status):
             valid_transitions = {
@@ -303,11 +307,12 @@ class Task(object):
 
     def _set_task_status(self, new_status):
         if self._validate_task_status_transition(self.status, new_status):
-            self._status = new_status
-            log_msg = (_("Task status changed from %(cur_status)s to "
+            # NOTE(nikhil): status was changed before logging. modified this
+            log_msg = (_("Task status changing from %(cur_status)s to "
                          "%(new_status)s") % {'cur_status': self.status,
                                               'new_status': new_status})
             LOG.info(log_msg)
+            self._status = new_status
         else:
             log_msg = (_("Task status failed to change from %(cur_status)s "
                          "to %(new_status)s") % {'cur_status': self.status,
@@ -359,3 +364,10 @@ class TaskFactory(object):
             created_at,
             updated_at
         )
+
+
+class TaskExecutorFactory(object):
+
+    def new_task_executor(self, context):
+        task_executor = 'glance.async.eventlet_executor.TaskEventletExecutor'
+        return importutils.import_object(task_executor, context)
