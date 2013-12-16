@@ -15,7 +15,6 @@
 
 from glance.common import exception
 from glance.openstack.common import log as logging
-from glance.openstack.common.gettextutils import _
 
 
 LOG = logging.getLogger(__name__)
@@ -50,7 +49,7 @@ class ImportScript(object):
         task = self.get_task(task_repo, task_id)
 
         if task is None:
-            #TODO: handle it in a better way
+            #TODO(nikhil): handle it in a better way
             return
 
         try:
@@ -61,7 +60,7 @@ class ImportScript(object):
 
             task.success(result={'image_id': image_id})
         except Exception as e:
-            #TODO: need to bring back save_and_reraise_exception
+            #TODO(nikhil): need to bring back save_and_reraise_exception
             # with excutils.save_and_reraise_exception():
             err_msg = unicode(type(e)) + ': ' + unicode(e)
             LOG.exception(err_msg)
@@ -73,8 +72,8 @@ class ImportScript(object):
     def unpack_task_input(self, task):
         task_input = task.input
 
-        for key in ["import_from", "import_from_format", "image_properties"]:
-            if not key in task_input:
+        for key in ['import_from', 'import_from_format', 'image_properties']:
+            if key not in task_input:
                 msg = _("Input does not contain '%(key)s' field"
                         % {"key": key})
                 raise exception.Invalid(msg)

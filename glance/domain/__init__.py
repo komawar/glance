@@ -21,6 +21,7 @@ from oslo.config import cfg
 
 from glance.common import exception
 import glance.openstack.common.log as logging
+from glance.openstack.common import importutils
 from glance.openstack.common import timeutils
 from glance.openstack.common import uuidutils
 
@@ -262,7 +263,10 @@ class Task(object):
         return self._status
 
     def run(self, executor):
-        pass
+        executor.run(self.task_id,
+                     self.status,
+                     self.type,
+                     self.input)
 
     def _validate_task_status_transition(self, cur_status, new_status):
             valid_transitions = {
@@ -335,3 +339,10 @@ class TaskFactory(object):
             created_at,
             updated_at
         )
+
+
+class TaskExecutorFactory(object):
+
+    def new_task_executor(self, context):
+        task_executor = 'glance.async.eventlet_executor.TaskEventletExecutor'
+        return importutils.import_object(task_executor, context)

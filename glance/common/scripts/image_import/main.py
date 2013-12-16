@@ -1,6 +1,4 @@
-# vim: tabstop=4 shiftwidth=4 softtabstop=4
-
-# Copyright 2010-2011 OpenStack LLC.
+# Copyright 2013 OpenStack LLC.
 # All Rights Reserved.
 #
 #    Licensed under the Apache License, Version 2.0 (the "License"); you may
@@ -23,7 +21,6 @@ import glance.gateway
 import glance.notifier
 import glance.store
 from glance.openstack.common import log as logging, importutils
-from glance.openstack.common.gettextutils import _
 
 
 LOG = logging.getLogger(__name__)

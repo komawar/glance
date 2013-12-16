@@ -16,8 +16,8 @@
 import eventlet
 
 from oslo.config import cfg
-from glance import async
 
+import glance.async
 from glance.common import exception
 from glance.openstack.common import log as logging
 from glance.openstack.common.gettextutils import _
@@ -38,7 +38,7 @@ CONF = cfg.CONF
 CONF.register_opts(task_type_opts)
 
 
-class TaskEventletExecutor(async.TaskExecutorInterface):
+class TaskEventletExecutor(glance.async.TaskExecutorInterface):
 
     def load_script(self, task_type):
         script = None

@@ -169,7 +169,7 @@ class TestTaskImportExecutor(base.IsolatedUnitTest):
                                                name='test_name')
         mock_add.assert_called_once_with({})
 
-    #TODO: to be fixed
+    #TODO(nikhil): to be fixed
     def test_execute(self):
         with mock.patch.object(self.import_script, 'unpack_task_input') \
             as mock_unpack_task_input:
