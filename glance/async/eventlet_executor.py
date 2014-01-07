@@ -20,7 +20,7 @@ from oslo.config import cfg
 import glance.async
 from glance.common import exception
 from glance.openstack.common import log as logging
-from glance.openstack.common.gettextutils import _
+from glance.common.scripts.image_export import main as image_export_script
 from glance.common.scripts.image_import import main as image_import_script
 
 
@@ -29,7 +29,7 @@ LOG = logging.getLogger(__name__)
 task_type_opts = [
     cfg.ListOpt('valid_tasks_type',
                 default=[
-                    'import',
+                    'import', 'export',
                 ],
                 help=_('List of tasks types supported by the deployment')),
 ]
@@ -44,6 +44,8 @@ class TaskEventletExecutor(glance.async.TaskExecutorInterface):
         script = None
         if task_type == 'import':
             script = image_import_script.ImageImporter()
+        if task_type == 'export':
+            script = image_export_script.ImageExporter()
         return script
 
     def run(self, task_id, task_status, task_type, task_input):

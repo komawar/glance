@@ -127,7 +127,7 @@ class RequestDeserializer(wsgi.JSONRequestDeserializer):
 
         type = filters.get('type', None)
         if type:
-            if type not in ['import']:
+            if type not in ['import', 'export']:
                 msg = _('Invalid type value: %s') % type
                 raise webob.exc.HTTPBadRequest(explanation=msg)
 
@@ -168,6 +168,8 @@ class RequestDeserializer(wsgi.JSONRequestDeserializer):
                 if key not in body['input']:
                     msg = _("Input does not contain '%s' field") % key
                     raise webob.exc.HTTPBadRequest(explanation=unicode(msg))
+
+        #TODO(nikhil): add validation for export task
 
     def __init__(self, schema=None):
         super(RequestDeserializer, self).__init__()
@@ -270,6 +272,7 @@ _TASK_SCHEMA = {
         "description": _("The type of task represented by this content"),
         "enum": [
             "import",
+            "export",
         ],
         "type": "string"
     },
