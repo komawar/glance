@@ -169,6 +169,8 @@ class RequestDeserializer(wsgi.JSONRequestDeserializer):
                     msg = _("Input does not contain '%s' field") % key
                     raise webob.exc.HTTPBadRequest(explanation=unicode(msg))
 
+        #TODO(nikhil): add validation for export task
+
     def __init__(self, schema=None):
         super(RequestDeserializer, self).__init__()
         self.schema = schema or get_task_schema()
@@ -270,6 +272,7 @@ _TASK_SCHEMA = {
         "description": _("The type of task represented by this content"),
         "enum": [
             "import",
+            "export",
         ],
         "type": "string"
     },
