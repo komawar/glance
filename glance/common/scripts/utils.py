@@ -46,6 +46,7 @@ CONF.import_opt('admin_password', 'glance.registry.client')
 CONF.import_opt('admin_tenant_name', 'glance.registry.client')
 CONF.import_opt('auth_url', 'glance.registry.client')
 
+
 class SwiftStore(object):
     CHUNKSIZE = 65536  # NOTE(nikhil): Same as swift BaseStore
 

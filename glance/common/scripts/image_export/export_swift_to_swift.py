@@ -22,11 +22,6 @@ from glance.common import exception
 from glance.common.scripts import utils as script_utils
 from glance.openstack.common import log as logging
 
-try:
-    import swiftclient
-except ImportError:
-    pass
-
 
 LOG = logging.getLogger(__name__)
 CONF = cfg.CONF

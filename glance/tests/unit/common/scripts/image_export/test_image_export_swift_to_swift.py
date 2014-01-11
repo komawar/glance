@@ -22,7 +22,6 @@ import testtools
 
 from glance.common import exception
 from glance.common.scripts.image_export import export_swift_to_swift
-from glance.common.scripts import utils as script_utils
 
 
 class ExportScriptTestCase(testtools.TestCase):
@@ -48,9 +47,9 @@ class ExportScriptTestCase(testtools.TestCase):
         self.export_script.transfer_image_data = mock.Mock()
 
         self.export_script.execute(task_id='blah')
-        
-        self.mock_gateway.get_task_repo.assert_called_once_with(
-            self.mock_context)
+
+        fake_task_repo = self.mock_gateway.get_task_repo
+        fake_task_repo.assert_called_once_with(self.mock_context)
         self.mock_task.begin_processing.assert_called_once_with()
         self.mock_task_repo.save.assert_called_once_with(self.mock_task)
 
@@ -128,7 +127,7 @@ class ExportScriptTestCase(testtools.TestCase):
                           self.mock_task)
 
     def test_validate_task_input_receiving_swift_container_special_chars(self):
-        """ Ensure a container name can not contain a '?', '.', or '/' in the
+        """Ensure a container name can not contain a '?', '.', or '/' in the
         name.
         """
         self.mock_task.input = {
