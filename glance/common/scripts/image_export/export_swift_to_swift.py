@@ -12,12 +12,14 @@
 #    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 #    License for the specific language governing permissions and limitations
 #    under the License.
+
 import re
 
 from oslo.config import cfg
 from glance.openstack.common import uuidutils
 
 from glance.common import exception
+from glance.common.scripts import utils as script_utils
 from glance.openstack.common import log as logging
 
 try:
@@ -59,6 +61,9 @@ class ExportScript(object):
 
         self.validate_task_input(task)
 
+        self.transfer_image_data(task.input['image_uuid'],
+                                 task.input['receiving_swift_container'])
+
     def get_task(self, task_repo, task_id):
         task = None
         try:
@@ -91,3 +96,18 @@ class ExportScript(object):
                     "task %(task_id)s. "
                     "Given value is ''.") % {'task_id': task.task_id}
             raise exception.Invalid(msg)
+
+    def transfer_image_data(self, image_id, swift_container):
+        image = self.image_repo.get(image_id)
+        image_data_iter = image.get_data()
+        self.upload_image_data(image_id, image_data_iter, swift_container)
+
+    def upload_image_data(self, image_id, data_iter, swift_container):
+        auth_token = getattr(self.context, 'auth_tok', None)
+        store = script_utils.SwiftStore()
+        try:
+            print store.get(swift_container, image_id, auth_token)
+        except exception.NotFound:
+            return
+
+        raise exception.Duplicate()
