@@ -127,7 +127,7 @@ class RequestDeserializer(wsgi.JSONRequestDeserializer):
 
         type = filters.get('type', None)
         if type:
-            if type not in ['import']:
+            if type not in ['import', 'export']:
                 msg = _('Invalid type value: %s') % type
                 raise webob.exc.HTTPBadRequest(explanation=msg)
 
