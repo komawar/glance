@@ -33,65 +33,55 @@ class ExportScript(object):
         self.context = context
         self.image_repo = self.gateway.get_repo(self.context)
         self.swift_store = swift_store or script_utils.SwiftStore()
+        self.task_repo = self.gateway.get_task_repo(self.context)
 
-    def _set_task_processing(self, task_repo, task_id):
-        task = self.get_task(task_repo, task_id)
-        if task is None:
-            #TODO(nikhil): handle it in a better way
-            LOG.error(_("Task corresponding to task_id %s was not found "
-                        "while attempting to execute it.") % task_id)
-            return
+    def _set_task_processing(self, task_id):
+        task = self._get_task(task_id)
 
         LOG.info(_("Executor is beginning processing on "
                    "Task %s") % task_id)
         task.begin_processing()
-        task_repo.save(task)
+        self.task_repo.save(task)
         return task
 
     def execute(self, task_id):
-        status = 'failure'
-        result = None
-        message = None
         try:
-            task_repo = self.gateway.get_task_repo(self.context)
-            task = self._set_task_processing(task_repo, task_id)
-
-            if task is None:
-                return
+            task = self._set_task_processing(task_id)
 
             self.validate_task_input(task)
 
             self.transfer_image_data(task.input['image_uuid'],
                                      task.input['receiving_swift_container'])
 
-            status = 'success'
+            #TODO: is this what we want?
             export_location = (str(task.input['receiving_swift_container'])
                                + '/' + str(task.input['image_uuid']))
-            result = {'export_location': export_location} #TODO better message
+            result = {'export_location': export_location}
+            self._save_task(task_id, result, status='success')
+        except exception.TaskNotFound as e:
+            msg = _('Task %s could not be found during execution') % task_id
+            LOG.exception(msg)
         except Exception as e:
             msg = _('Task Failed') #TODO better message
             LOG.exception(msg)
-            message = 'Foo Bar' #TODO better message
+            self._save_task(task_id, msg, status='failure')
 
-        if result:
-            info = result
-        else:
-            info = message
+    def _save_task(self, task_id, info, status='failure'):
+        task = self._get_task(task_id)
+        if status == 'failure':
+            task.fail(info)
+        elif status == 'success':
+            task.succeed(info)
 
-        self.save_task(task_id, task_repo, info, status=status)
+        self.task_repo.save(task)
 
-    def save_task(self, task_id, task_repo, info, status='failure'):
-        return
-
-    def get_task(self, task_repo, task_id):
-        task = None
+    def _get_task(self, task_id):
         try:
-            task = task_repo.get(task_id)
+            return self.task_repo.get(task_id)
         except exception.NotFound as e:
             msg = _('Task not found for task_id %s') % task_id
             LOG.exception(msg)
-
-        return task
+            raise exception.TaskNotFound(str(e), task_id=task_id)
 
     def validate_task_input(self, task):
 

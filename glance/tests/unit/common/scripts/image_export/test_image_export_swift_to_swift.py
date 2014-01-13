@@ -49,34 +49,32 @@ class ExportScriptTestCase(testtools.TestCase):
             "receiving_swift_container": fake_container,
         }
         self.export_script.transfer_image_data = mock.Mock()
-        self.export_script.validate_task_input = mock.Mock()
-        self.export_script.save_task = mock.Mock()
 
         self.export_script.execute(task_id='blah')
 
         self.mock_gateway.get_task_repo.assert_called_once_with(
             self.mock_context)
         self.mock_task.begin_processing.assert_called_once_with()
-        self.mock_task_repo.save.assert_called_once_with(self.mock_task)
-        self.export_script.validate_task_input.assert_called_once_with(
-            self.mock_task)
+        self.mock_task_repo.save.assert_called_with(self.mock_task)
         self.export_script.transfer_image_data.assert_called_once_with(
             fake_image_uuid, fake_container)
-        self.export_script.save_task.assert_called_once_with(
-            'blah',
-            self.mock_task_repo,
-            {'export_location': '%s/%s' % (fake_container, fake_image_uuid)},
-            status='success')
+        self.mock_task.succeed.assert_called_once_with({'export_location': '%s/%s' % (fake_container, fake_image_uuid)})
+
+    def test_execute_invalid_input(self):
+        self.mock_task.input = {"image_uuid": "invalid"}
+
+        self.export_script.execute(task_id='blah')
+
+        self.mock_task.fail.assert_called_once_with('Task Failed')
 
     def test_execute_task_not_found(self):
-        self.mock_task_repo.get.return_value = None
+        self.mock_task_repo.get.side_effect = exception.NotFound
 
         self.export_script.execute(task_id='blah')
 
         #NOTE(ameade): Execution should fail silently
 
     def test_execute_image_not_found(self):
-        self.export_script.save_task = mock.Mock()
         self.export_script.image_repo = mock.Mock()
         self.export_script.image_repo.get.side_effect = exception.NotFound
         fake_image_uuid = str(uuid.uuid4())
@@ -89,20 +87,7 @@ class ExportScriptTestCase(testtools.TestCase):
         self.mock_gateway.get_task_repo.assert_called_once_with(
             self.mock_context)
 
-        self.export_script.save_task.assert_called_once_with(
-            'blah',
-            self.mock_task_repo,
-            mock.ANY,
-            status='failure')
-
-    def test_get_task(self):
-        task = self.export_script.get_task(self.mock_task_repo, 'fake_task_id')
-        self.assertEqual(task, self.mock_task)
-
-    def test_get_task_not_found(self):
-        self.mock_task_repo.get.side_effect = exception.NotFound
-        task = self.export_script.get_task(self.mock_task_repo, 'fake_task_id')
-        self.assertEqual(task, None)
+        self.mock_task.fail.assert_called_once_with('Task Failed')
 
     def test_validate_task_input(self):
         self.mock_task.input = {
