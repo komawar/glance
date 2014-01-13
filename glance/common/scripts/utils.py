@@ -22,6 +22,7 @@ from oslo.config import cfg
 from oslo.messaging.openstack.common import excutils
 
 from glance.common import exception
+from glance.common import utils
 from glance.openstack.common import log as logging
 from glance.openstack.common import jsonutils
 from glance.openstack.common import timeutils
@@ -284,6 +285,8 @@ class SwiftStore(object):
     def add(self, image_id, image_data, image_size,
             auth_token, container, connection=None):
 
+        image_data = utils.CooperativeReader(image_data)
+
         if not connection:
             connection = self.get_connection(auth_token)
 
@@ -294,7 +297,8 @@ class SwiftStore(object):
                 # Image size is known, and is less than large_object_size.
                 # Send to Swift with regular PUT.
                 obj_etag = connection.put_object(container,
-                                                 image_id, image_data,
+                                                 image_id,
+                                                 image_data,
                                                  content_length=image_size)
             else:
                 # Write the image into Swift in chunks.
@@ -382,7 +386,8 @@ class SwiftStore(object):
                 # the MD5 of the entire image file contents, so that
                 # users can verify the image file contents accordingly
                 connection.put_object(container, image_id,
-                                      None, headers=headers)
+                                      None,
+                                      headers=headers)
                 obj_etag = checksum.hexdigest()
 
             # NOTE: We return the user and key here! Have to because

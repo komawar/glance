@@ -29,7 +29,7 @@ LOG = logging.getLogger(__name__)
 task_type_opts = [
     cfg.ListOpt('valid_tasks_type',
                 default=[
-                    'import',
+                    'import', 'export',
                 ],
                 help=_('List of tasks types supported by the deployment')),
 ]
