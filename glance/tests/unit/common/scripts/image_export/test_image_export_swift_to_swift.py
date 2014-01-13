@@ -28,6 +28,7 @@ class ExportScriptTestCase(testtools.TestCase):
     def setUp(self):
         super(ExportScriptTestCase, self).setUp()
         self.mock_gateway = mock.Mock()
+        self.mock_swift_store = mock.Mock()
         self.mock_task = mock.Mock()
         self.mock_task.task_id = 'blah'
         self.mock_image_id = mock.Mock()
@@ -37,21 +38,35 @@ class ExportScriptTestCase(testtools.TestCase):
         self.mock_context = mock.Mock()
         self.export_script = export_swift_to_swift.ExportScript(
             gateway=self.mock_gateway,
-            context=self.mock_context)
+            context=self.mock_context,
+            swift_store=self.mock_swift_store)
 
     def test_execute(self):
+        fake_image_uuid = str(uuid.uuid4())
+        fake_container = 'blah foo'
         self.mock_task.input = {
-            "image_uuid": str(uuid.uuid4()),
-            "receiving_swift_container": 'blah foo',
+            "image_uuid": fake_image_uuid,
+            "receiving_swift_container": fake_container,
         }
         self.export_script.transfer_image_data = mock.Mock()
+        self.export_script.validate_task_input = mock.Mock()
+        self.export_script.save_task = mock.Mock()
 
         self.export_script.execute(task_id='blah')
 
-        fake_task_repo = self.mock_gateway.get_task_repo
-        fake_task_repo.assert_called_once_with(self.mock_context)
+        self.mock_gateway.get_task_repo.assert_called_once_with(
+            self.mock_context)
         self.mock_task.begin_processing.assert_called_once_with()
         self.mock_task_repo.save.assert_called_once_with(self.mock_task)
+        self.export_script.validate_task_input.assert_called_once_with(
+            self.mock_task)
+        self.export_script.transfer_image_data.assert_called_once_with(
+            fake_image_uuid, fake_container)
+        self.export_script.save_task.assert_called_once_with(
+            'blah',
+            self.mock_task_repo,
+            {'export_location': '%s/%s' % (fake_container, fake_image_uuid)},
+            status='success')
 
     def test_execute_task_not_found(self):
         self.mock_task_repo.get.return_value = None
@@ -61,7 +76,9 @@ class ExportScriptTestCase(testtools.TestCase):
         #NOTE(ameade): Execution should fail silently
 
     def test_execute_image_not_found(self):
-        self.export_script.transfer_image_data = mock.Mock()
+        self.export_script.save_task = mock.Mock()
+        self.export_script.image_repo = mock.Mock()
+        self.export_script.image_repo.get.side_effect = exception.NotFound
         fake_image_uuid = str(uuid.uuid4())
         fake_container = 'blah'
         self.mock_task.input = {
@@ -71,10 +88,12 @@ class ExportScriptTestCase(testtools.TestCase):
         self.export_script.execute(task_id='blah')
         self.mock_gateway.get_task_repo.assert_called_once_with(
             self.mock_context)
-        self.export_script.transfer_image_data.assert_called_once_with(
-            fake_image_uuid, fake_container)
 
-        #NOTE(ameade): Execution should fail silently
+        self.export_script.save_task.assert_called_once_with(
+            'blah',
+            self.mock_task_repo,
+            mock.ANY,
+            status='failure')
 
     def test_get_task(self):
         task = self.export_script.get_task(self.mock_task_repo, 'fake_task_id')
@@ -196,12 +215,27 @@ class ExportScriptTestCase(testtools.TestCase):
     def test_upload_image_data_object_exists(self):
         fake_image_data_iter = mock.Mock()
         fake_image_id = mock.Mock()
+        self.mock_swift_store.add.side_effect = exception.Duplicate
 
-        fake_swift_store_cls = 'glance.common.scripts.utils.SwiftStore'
-        with mock.patch(fake_swift_store_cls) as mock_swift_store:
-            mock_swift_store.get.return_value = ('data_iter', 'length')
-            self.assertRaises(exception.Duplicate,
-                              self.export_script.upload_image_data,
-                              fake_image_id,
-                              fake_image_data_iter,
-                              'fake_container')
+        self.assertRaises(exception.Duplicate,
+                          self.export_script.upload_image_data,
+                          fake_image_id,
+                          fake_image_data_iter,
+                          0,
+                          'fake_container')
+
+    def test_upload_image_data(self):
+        fake_image_data_iter = mock.Mock()
+        fake_image_id = mock.Mock()
+        fake_size = 0
+
+        self.export_script.upload_image_data(fake_image_id,
+                                             fake_image_data_iter,
+                                             fake_size,
+                                             'container')
+        self.mock_swift_store.add.assert_called_once_with(
+            fake_image_id,
+            fake_image_data_iter,
+            fake_size,
+            mock.ANY,
+            'container')

@@ -12,11 +12,14 @@
 #    WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 #    License for the specific language governing permissions and limitations
 #    under the License.
+import hashlib
 
 import httplib
 import time
+import math
 
 from oslo.config import cfg
+from oslo.messaging.openstack.common import excutils
 
 from glance.common import exception
 from glance.openstack.common import log as logging
@@ -30,6 +33,9 @@ except ImportError:
     pass
 
 
+ONE_MB = 1000 * 1024
+
+
 LOG = logging.getLogger(__name__)
 CONF = cfg.CONF
 
@@ -41,6 +47,8 @@ CONF.import_opt('swift_store_service_type', 'glance.store.swift')
 CONF.import_opt('swift_store_endpoint_type', 'glance.store.swift')
 CONF.import_opt('swift_enable_snet', 'glance.store.swift')
 CONF.import_opt('swift_store_ssl_compression', 'glance.store.swift')
+CONF.import_opt('swift_store_large_object_size', 'glance.store.swift')
+CONF.import_opt('swift_store_large_object_chunk_size', 'glance.store.swift')
 CONF.import_opt('admin_user', 'glance.registry.client')
 CONF.import_opt('admin_password', 'glance.registry.client')
 CONF.import_opt('admin_tenant_name', 'glance.registry.client')
@@ -59,6 +67,10 @@ class SwiftStore(object):
         self.endpoint_type = CONF.swift_store_endpoint_type
         self.snet = CONF.swift_enable_snet
         self.ssl_compression = CONF.swift_store_ssl_compression
+        self._obj_size = CONF.swift_store_large_object_size
+        self.large_object_size = self._obj_size * ONE_MB
+        self._chunk_size = CONF.swift_store_large_object_chunk_size
+        self.large_object_chunk_size = self._chunk_size * ONE_MB
 
     def _option_get(self, param):
         result = getattr(CONF, param)
@@ -94,6 +106,8 @@ class SwiftStore(object):
 
         RETRIES = 5
         retry = 0
+        response = None
+        body = None
         while True:
             try:
                 conn.request(method, path, **kwargs)
@@ -221,6 +235,15 @@ class SwiftStore(object):
                                       os_options=os_options,
                                       ssl_compression=self.ssl_compression)
 
+    def _delete_stale_chunks(self, connection, container, chunk_list):
+            for chunk in chunk_list:
+                LOG.debug(_("Deleting chunk %s") % chunk)
+                try:
+                    connection.delete_object(container, chunk)
+                except Exception:
+                    msg = _("Failed to delete orphaned chunk %s/%s")
+                    LOG.exception(msg, container, chunk)
+
     def get(self, container, obj, auth_token, connection=None):
         if not connection:
             try:  # NOTE(nikhil): added the try block
@@ -257,3 +280,142 @@ class SwiftStore(object):
             return ResponseIndexable(resp_body, length), length
         else:
             LOG.warn(_("_No object returned."))
+
+    def add(self, image_id, image_data, image_size,
+            auth_token, container, connection=None):
+
+        if not connection:
+            connection = self.get_connection(auth_token)
+
+        LOG.debug(_("Adding image object '%(obj_name)s' "
+                    "to Swift") % dict(obj_name=image_id))
+        try:
+            if image_size > 0 and image_size < self.large_object_size:
+                # Image size is known, and is less than large_object_size.
+                # Send to Swift with regular PUT.
+                obj_etag = connection.put_object(container,
+                                                 image_id, image_data,
+                                                 content_length=image_size)
+            else:
+                # Write the image into Swift in chunks.
+                chunk_id = 1
+                if image_size > 0:
+                    total_chunks = str(int(
+                        math.ceil(float(image_size) /
+                                  float(self.large_object_chunk_size))))
+                else:
+                    # image_size == 0 is when we don't know the size
+                    # of the image. This can occur with older clients
+                    # that don't inspect the payload size.
+                    LOG.debug(_("Cannot determine image size. Adding as a "
+                                "segmented object to Swift."))
+                    total_chunks = '?'
+
+                checksum = hashlib.md5()
+                written_chunks = []
+                combined_chunks_size = 0
+                while True:
+                    chunk_size = self.large_object_chunk_size
+                    if image_size == 0:
+                        content_length = None
+                    else:
+                        left = image_size - combined_chunks_size
+                        if left == 0:
+                            break
+                        if chunk_size > left:
+                            chunk_size = left
+                        content_length = chunk_size
+
+                    chunk_name = "%s-%05d" % (image_id, chunk_id)
+                    reader = ChunkReader(image_data, checksum, chunk_size)
+                    chunk_etag = None
+                    try:
+                        chunk_etag = connection.put_object(container,
+                                chunk_name, reader, content_length=content_length)
+                        written_chunks.append(chunk_name)
+                    except Exception:
+                        # Delete orphaned segments from swift backend
+                        with excutils.save_and_reraise_exception():
+                            LOG.exception(_("Error during chunked upload to "
+                                            "backend, deleting stale chunks"))
+                            self._delete_stale_chunks(connection,
+                                                      container,
+                                                      written_chunks)
+
+                    bytes_read = reader.bytes_read
+                    msg = (_("Wrote chunk %(chunk_name)s (%(chunk_id)d/"
+                             "%(total_chunks)s) of length %(bytes_read)d "
+                             "to Swift returning MD5 of content: "
+                             "%(chunk_etag)s") %
+                           {'chunk_name': chunk_name,
+                            'chunk_id': chunk_id,
+                            'total_chunks': total_chunks,
+                            'bytes_read': bytes_read,
+                            'chunk_etag': chunk_etag})
+                    LOG.debug(msg)
+
+                    if bytes_read == 0:
+                        # Delete the last chunk, because it's of zero size.
+                        # This will happen if size == 0.
+                        LOG.debug(_("Deleting final zero-length chunk"))
+                        connection.delete_object(container,
+                                                 chunk_name)
+                        break
+
+                    chunk_id += 1
+                    combined_chunks_size += bytes_read
+
+                # In the case we have been given an unknown image size,
+                # set the size to the total size of the combined chunks.
+                if image_size == 0:
+                    image_size = combined_chunks_size
+
+                # Now we write the object manifest and return the
+                # manifest's etag...
+                manifest = "%s/%s-" % (container, image_id)
+                headers = {'ETag': hashlib.md5("").hexdigest(),
+                           'X-Object-Manifest': manifest}
+
+                # The ETag returned for the manifest is actually the
+                # MD5 hash of the concatenated checksums of the strings
+                # of each chunk...so we ignore this result in favour of
+                # the MD5 of the entire image file contents, so that
+                # users can verify the image file contents accordingly
+                connection.put_object(container, image_id,
+                                      None, headers=headers)
+                obj_etag = checksum.hexdigest()
+
+            # NOTE: We return the user and key here! Have to because
+            # location is used by the API server to return the actual
+            # image data. We *really* should consider NOT returning
+            # the location attribute from GET /images/<ID> and
+            # GET /images/details
+
+            # return (location.get_uri(), image_size, obj_etag, {})
+            return obj_etag
+
+        except swiftclient.ClientException as e:
+            if e.http_status == httplib.CONFLICT:
+                raise exception.Duplicate(_("Swift already has an image at "
+                                            "this location"))
+            msg = (_("Failed to add object to Swift.\n"
+                     "Got error from Swift: %(e)s") % {'e': e})
+            LOG.error(msg)
+            raise glance.store.BackendException(msg)
+
+
+class ChunkReader(object):
+    def __init__(self, fd, checksum, total):
+        self.fd = fd
+        self.checksum = checksum
+        self.total = total
+        self.bytes_read = 0
+
+    def read(self, i):
+        left = self.total - self.bytes_read
+        if i > left:
+            i = left
+        result = self.fd.read(i)
+        self.bytes_read += len(result)
+        self.checksum.update(result)
+        return result

@@ -28,10 +28,11 @@ CONF = cfg.CONF
 
 
 class ExportScript(object):
-    def __init__(self, gateway, context):
+    def __init__(self, gateway, context, swift_store=None):
         self.gateway = gateway
         self.context = context
         self.image_repo = self.gateway.get_repo(self.context)
+        self.swift_store = swift_store or script_utils.SwiftStore()
 
     def _set_task_processing(self, task_repo, task_id):
         task = self.get_task(task_repo, task_id)
@@ -48,16 +49,39 @@ class ExportScript(object):
         return task
 
     def execute(self, task_id):
-        task_repo = self.gateway.get_task_repo(self.context)
-        task = self._set_task_processing(task_repo, task_id)
+        status = 'failure'
+        result = None
+        message = None
+        try:
+            task_repo = self.gateway.get_task_repo(self.context)
+            task = self._set_task_processing(task_repo, task_id)
 
-        if task is None:
-            return
+            if task is None:
+                return
 
-        self.validate_task_input(task)
+            self.validate_task_input(task)
 
-        self.transfer_image_data(task.input['image_uuid'],
-                                 task.input['receiving_swift_container'])
+            self.transfer_image_data(task.input['image_uuid'],
+                                     task.input['receiving_swift_container'])
+
+            status = 'success'
+            export_location = (str(task.input['receiving_swift_container'])
+                               + '/' + str(task.input['image_uuid']))
+            result = {'export_location': export_location} #TODO better message
+        except Exception as e:
+            msg = _('Task Failed') #TODO better message
+            LOG.exception(msg)
+            message = 'Foo Bar' #TODO better message
+
+        if result:
+            info = result
+        else:
+            info = message
+
+        self.save_task(task_id, task_repo, info, status=status)
+
+    def save_task(self, task_id, task_repo, info, status='failure'):
+        return
 
     def get_task(self, task_repo, task_id):
         task = None
@@ -94,15 +118,13 @@ class ExportScript(object):
 
     def transfer_image_data(self, image_id, swift_container):
         image = self.image_repo.get(image_id)
+        image_size = image.size
         image_data_iter = image.get_data()
-        self.upload_image_data(image_id, image_data_iter, swift_container)
+        self.upload_image_data(image_id, image_data_iter,
+                               image_size, swift_container)
 
-    def upload_image_data(self, image_id, data_iter, swift_container):
+    def upload_image_data(self, image_id, data_iter,
+                          image_size, swift_container):
         auth_token = getattr(self.context, 'auth_tok', None)
-        store = script_utils.SwiftStore()
-        try:
-            print store.get(swift_container, image_id, auth_token)
-        except exception.NotFound:
-            return
-
-        raise exception.Duplicate()
+        self.swift_store.add(image_id, data_iter, image_size, auth_token,
+                             swift_container)
