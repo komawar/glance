@@ -65,7 +65,7 @@ class ExportScriptTestCase(testtools.TestCase):
 
         self.export_script.execute(task_id='blah')
 
-        self.mock_task.fail.assert_called_once_with('Task Failed')
+        self.mock_task.fail.assert_called_once_with(mock.ANY)
 
     def test_execute_task_not_found(self):
         self.mock_task_repo.get.side_effect = exception.NotFound
@@ -87,7 +87,7 @@ class ExportScriptTestCase(testtools.TestCase):
         self.mock_gateway.get_task_repo.assert_called_once_with(
             self.mock_context)
 
-        self.mock_task.fail.assert_called_once_with('Task Failed')
+        self.mock_task.fail.assert_called_once_with(mock.ANY)
 
     def test_validate_task_input(self):
         self.mock_task.input = {
@@ -99,7 +99,7 @@ class ExportScriptTestCase(testtools.TestCase):
     def test_validate_task_input_with_unicode(self):
         self.mock_task.input = {
             "image_uuid": str(uuid.uuid4()),
-            "receiving_swift_container": "ಠ_ಠ",
+            "receiving_swift_container": u"ಠ_ಠ",
         }
         self.export_script.validate_task_input(self.mock_task)
 

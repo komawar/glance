@@ -58,11 +58,22 @@ class ExportScript(object):
                                + '/' + str(task.input['image_uuid']))
             result = {'export_location': export_location}
             self._save_task(task_id, result, status='success')
+        # NOTE(ameade): Always use unicode for logging and saving tasks. The
+        # task won't set it's status otherwise.
         except exception.TaskNotFound as e:
             msg = _('Task %s could not be found during execution') % task_id
             LOG.exception(msg)
+        except exception.Duplicate as e:
+            LOG.exception(unicode(e))
+            self._save_task(task_id, unicode(e), status='failure')
+        except exception.NotFound as e:
+            LOG.exception(unicode(e))
+            self._save_task(task_id, unicode(e), status='failure')
+        except exception.Invalid as e:
+            LOG.info(unicode(e))
+            self._save_task(task_id, unicode(e), status='failure')
         except Exception as e:
-            msg = _('Task Failed') #TODO better message
+            msg = _('Unknown error occurred during execution')
             LOG.exception(msg)
             self._save_task(task_id, msg, status='failure')
 
@@ -87,23 +98,24 @@ class ExportScript(object):
 
         for key in ["image_uuid", "receiving_swift_container"]:
             if key not in task.input:
-                msg = _("Task %(task_id)s input has missing key "
-                        "%(key)s") % {'task_id': task.task_id, 'key': key}
+                msg = _("Task '%(task_id)s' input has missing key "
+                        "'%(key)s'") % {'task_id': task.task_id, 'key': key}
                 raise exception.Invalid(msg)
 
         image_id = task.input["image_uuid"]
 
         if not uuidutils.is_uuid_like(image_id):
-            msg = _("The specified image id %(image_id)s for task %(task_id)s"
-                    " is not a uuid.") % {'task_id': task.task_id,
-                                          'image_id': image_id}
+            msg = _("The specified image id '%(image_id)s' for task "
+                    "'%(task_id)s' is not a uuid.") % {'task_id': task.task_id,
+                                                       'image_id': image_id}
             raise exception.Invalid(msg)
 
         container = task.input["receiving_swift_container"]
-        if str(container) == '' or re.search(r'[/?.]', str(container)):
-            msg = _("Invalid value for receiving_swift_container for "
-                    "task %(task_id)s. "
-                    "Given value is ''.") % {'task_id': task.task_id}
+        if container == '' or re.search(r'[/?.]', container):
+            msg = _("Invalid value of receiving_swift_container for "
+                    "task '%(task_id)s' Given value is"
+                    " '%(container)s'") % {'task_id': task.task_id,
+                                           'container': container}
             raise exception.Invalid(msg)
 
     def transfer_image_data(self, image_id, swift_container):

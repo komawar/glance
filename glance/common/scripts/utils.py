@@ -285,11 +285,41 @@ class SwiftStore(object):
     def add(self, image_id, image_data, image_size,
             auth_token, container, connection=None):
 
-        image_data = utils.CooperativeReader(image_data)
-
         if not connection:
             connection = self.get_connection(auth_token)
 
+        # Check if the container does not exists.
+        try:
+            connection.head_container(container)
+        except swiftclient.ClientException as e:
+            if e.http_status == 404:
+                msg = _("container '%s' does not exist") % container
+                LOG.exception(msg)
+                raise exception.NotFound(message=msg)
+            else:
+                msg = _("Unexpected error while checking for container"
+                        " '%s'") % container
+                LOG.exception(msg)
+                raise
+
+        # Check if the object already exists in the container to avoid
+        # over-writing.
+        try:
+            connection.head_object(container, image_id)
+            msg = _("Swift already has an object with id '%(image_id)s' in "
+                    "container '%(container)s'") % dict(image_id=image_id,
+                                                        container=container)
+            raise exception.Duplicate(msg)
+        except swiftclient.ClientException as e:
+            if e.http_status != 404:
+                msg = _("Unexpected error while checking for object '%("
+                        "image_id)s' in container "
+                        "'%(container)s'") % dict(image_id=image_id,
+                                                  container=container)
+                LOG.exception(msg)
+                raise
+
+        image_data = utils.CooperativeReader(image_data)
         LOG.debug(_("Adding image object '%(obj_name)s' "
                     "to Swift") % dict(obj_name=image_id))
         try:
