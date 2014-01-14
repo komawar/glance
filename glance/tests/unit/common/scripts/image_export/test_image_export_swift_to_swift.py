@@ -58,7 +58,8 @@ class ExportScriptTestCase(testtools.TestCase):
         self.mock_task_repo.save.assert_called_with(self.mock_task)
         self.export_script.transfer_image_data.assert_called_once_with(
             fake_image_uuid, fake_container)
-        self.mock_task.succeed.assert_called_once_with({'export_location': '%s/%s' % (fake_container, fake_image_uuid)})
+        res = {'export_location': '%s/%s' % (fake_container, fake_image_uuid)}
+        self.mock_task.succeed.assert_called_once_with(res)
 
     def test_execute_invalid_input(self):
         self.mock_task.input = {"image_uuid": "invalid"}

@@ -364,8 +364,9 @@ class SwiftStore(object):
                     reader = ChunkReader(image_data, checksum, chunk_size)
                     chunk_etag = None
                     try:
-                        chunk_etag = connection.put_object(container,
-                                chunk_name, reader, content_length=content_length)
+                        chunk_etag = connection.put_object(
+                            container, chunk_name,
+                            reader, content_length=content_length)
                         written_chunks.append(chunk_name)
                     except Exception:
                         # Delete orphaned segments from swift backend

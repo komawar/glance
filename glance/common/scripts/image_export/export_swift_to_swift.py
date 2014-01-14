@@ -14,9 +14,9 @@
 #    under the License.
 
 import re
+import uuid
 
 from oslo.config import cfg
-from glance.openstack.common import uuidutils
 
 from glance.common import exception
 from glance.common.scripts import utils as script_utils
@@ -53,7 +53,7 @@ class ExportScript(object):
             self.transfer_image_data(task.input['image_uuid'],
                                      task.input['receiving_swift_container'])
 
-            #TODO: is this what we want?
+            #TODO(nikhil): is this what we want?
             export_location = (str(task.input['receiving_swift_container'])
                                + '/' + str(task.input['image_uuid']))
             result = {'export_location': export_location}
@@ -104,7 +104,7 @@ class ExportScript(object):
 
         image_id = task.input["image_uuid"]
 
-        if not uuidutils.is_uuid_like(image_id):
+        if not self._is_uuid_like(image_id):
             msg = _("The specified image id '%(image_id)s' for task "
                     "'%(task_id)s' is not a uuid.") % {'task_id': task.task_id,
                                                        'image_id': image_id}
@@ -130,3 +130,9 @@ class ExportScript(object):
         auth_token = getattr(self.context, 'auth_tok', None)
         self.swift_store.add(image_id, data_iter, image_size, auth_token,
                              swift_container)
+
+    def _is_uuid_like(self, val):
+        try:
+            return str(uuid.UUID(val)) == val
+        except (TypeError, ValueError, AttributeError):
+            return False
