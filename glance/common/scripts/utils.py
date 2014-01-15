@@ -19,10 +19,10 @@ import time
 import math
 
 from oslo.config import cfg
-from oslo.messaging.openstack.common import excutils
 
 from glance.common import exception
 from glance.common import utils
+from glance.openstack.common import excutils
 from glance.openstack.common import log as logging
 from glance.openstack.common import jsonutils
 from glance.openstack.common import timeutils
