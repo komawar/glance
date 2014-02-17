@@ -21,6 +21,7 @@ import uuid
 from oslo.config import cfg
 
 from glance.common import exception
+from glance.openstack.common import importutils
 import glance.openstack.common.log as logging
 from glance.openstack.common import timeutils
 
@@ -411,3 +412,10 @@ class TaskFactory(object):
             updated_at,
             task_time_to_live
         )
+
+
+class TaskExecutorFactory(object):
+
+    def new_task_executor(self, context):
+        task_executor = 'glance.async.eventlet_executor.TaskEventletExecutor'
+        return importutils.import_object(task_executor, context)

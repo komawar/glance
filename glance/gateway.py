@@ -107,3 +107,6 @@ class Gateway(object):
         authorized_task_repo = authorization.TaskRepoProxy(
             notifier_task_repo, context)
         return authorized_task_repo
+
+    def get_task_executor(self, context):
+        return glance.domain.TaskExecutorFactory().new_task_executor(context)
