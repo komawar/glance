@@ -62,7 +62,7 @@ class TasksController(object):
                                              owner=req.context.owner,
                                              task_time_to_live=live_time)
             task_repo.add(new_task)
-            task_executor.run()
+            new_task.run(task_executor)
         except exception.Forbidden as e:
             msg = (_("Forbidden to create task. Reason: %(reason)s")
                    % {'reason': unicode(e)})

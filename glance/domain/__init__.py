@@ -338,7 +338,10 @@ class Task(object):
         return self._status
 
     def run(self, executor):
-        pass
+        executor.run(self.task_id,
+                     self.status,
+                     self.type,
+                     self.input)
 
     def _validate_task_status_transition(self, cur_status, new_status):
             valid_transitions = {

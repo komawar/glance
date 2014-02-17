@@ -13,11 +13,19 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+import glance.openstack.common.log as logging
+
+
+LOG = logging.getLogger(__name__)
+
 
 class TaskEventletExecutor(object):
 
     def __init__(self, context):
         self.context = context
 
-    def run(self):
-        pass
+    def run(self, task_id, status, type, input):
+        LOG.info(_('Starting execution for task %s') % task_id)
+        LOG.info(_('Task status %s') % status)
+        LOG.info(_('Task type %s') % type)
+        LOG.info(_('Task input %s') % input)
