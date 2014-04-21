@@ -120,3 +120,11 @@ class Gateway(object):
         authorized_task_stub_repo = authorization.TaskStubRepoProxy(
             notifier_task_stub_repo, context)
         return authorized_task_stub_repo
+
+    def get_task_executor_factory(self, context):
+        task_repo = self.get_task_repo(context)
+        image_repo = self.get_repo(context)
+        image_factory = self.get_image_factory(context)
+        return glance.domain.TaskExecutorFactory(task_repo,
+                                                 image_repo,
+                                                 image_factory)

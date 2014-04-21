@@ -61,6 +61,12 @@ task_opts = [
                       "succeeding or failing"),
                deprecated_opts=[cfg.DeprecatedOpt('task_time_to_live',
                                                   group='DEFAULT')]),
+    cfg.StrOpt('task_executor',
+               default='eventlet',
+               help=_("The executor to be used to process task operations.")),
+    cfg.IntOpt('eventlet_executor_pool_size',
+               default=1000,
+               help=_("The executor to be used to process task operations.")),
 ]
 common_opts = [
     cfg.BoolOpt('allow_additional_image_properties', default=True,
