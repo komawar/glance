@@ -25,14 +25,14 @@ import six
 from glance.common import exception
 from glance.common.scripts import utils as script_utils
 from glance.common import utils as common_utils
-from glance.openstack.common import gettextutils
+from glance import i18n
 from glance.openstack.common import lockutils
 import glance.openstack.common.log as logging
 
 
-_LE = gettextutils._LE
-_LI = gettextutils._LI
-_LW = gettextutils._LW
+_LE = i18n._LE
+_LI = i18n._LI
+_LW = i18n._LW
 LOG = logging.getLogger(__name__)
 task_id = None
 

@@ -27,11 +27,11 @@ DEFAULT = 1
 import urllib2
 
 from glance.common import exception
-from glance.openstack.common import gettextutils
+from glance import i18n
 import glance.openstack.common.log as logging
 
 
-_LE = gettextutils._LE
+_LE = i18n._LE
 LOG = logging.getLogger(__name__)
 
 

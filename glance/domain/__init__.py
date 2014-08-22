@@ -22,13 +22,13 @@ from oslo.config import cfg
 import six
 
 from glance.common import exception
+from glance import i18n
 from glance.openstack.common import excutils
-from glance.openstack.common import gettextutils
 from glance.openstack.common import importutils
 import glance.openstack.common.log as logging
 from glance.openstack.common import timeutils
 
-_LE = gettextutils._LE
+_LE = i18n._LE
 LOG = logging.getLogger(__name__)
 CONF = cfg.CONF
 CONF.import_opt('task_executor', 'glance.common.config', group='task')
