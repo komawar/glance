@@ -15,17 +15,16 @@
 
 __all__ = [
     'run',
-    'import_image',
-    'create_image',
-    'set_image_data',
 ]
 
 import six
 
+from glance.api.v2 import images as v2_api
 from glance.common import exception
 from glance.common.scripts import utils as script_utils
 from glance.common import utils as common_utils
 from glance import i18n
+from glance.openstack.common import excutils
 from glance.openstack.common import lockutils
 import glance.openstack.common.log as logging
 
@@ -34,7 +33,6 @@ _LE = i18n._LE
 _LI = i18n._LI
 _LW = i18n._LW
 LOG = logging.getLogger(__name__)
-task_id = None
 
 
 def run(t_id, context, task_repo, image_repo, image_factory):
@@ -49,8 +47,6 @@ def run(t_id, context, task_repo, image_repo, image_factory):
 @lockutils.synchronized("glance_import")
 def _execute(t_id, task_repo, image_repo, image_factory):
     task = script_utils.get_task(task_repo, t_id)
-    global task_id
-    task_id = task.task_id
 
     if task is None:
         # NOTE: This happens if task is not found in the database. In
@@ -61,9 +57,9 @@ def _execute(t_id, task_repo, image_repo, image_factory):
     try:
         task_input = script_utils.unpack_task_input(task)
 
-        uri = script_utils.format_location_uri(task_input.get('import_from',
-                                                              None))
-        image_id = import_image(image_repo, image_factory, task_input, uri)
+        uri = script_utils.validate_location_uri(task_input.get('import_from'))
+        image_id = import_image(image_repo, image_factory, task_input, t_id,
+                                uri)
 
         task.succeed({'image_id': image_id})
     except Exception as e:
@@ -82,14 +78,13 @@ def _execute(t_id, task_repo, image_repo, image_factory):
         task_repo.save(task)
 
 
-def import_image(image_repo, image_factory, task_input, uri):
-    original_image = create_image(image_repo,
-                                  image_factory,
-                                  task_input.get('image_properties'))
+def import_image(image_repo, image_factory, task_input, task_id, uri):
+    original_image = create_image(image_repo, image_factory,
+                                  task_input.get('image_properties'), task_id)
     # NOTE: set image status to saving just before setting data
     original_image.status = 'saving'
     image_repo.save(original_image)
-    set_image_data(original_image, uri)
+    set_image_data(original_image, uri, None)
 
     # NOTE: Check if the Image is not deleted after setting the data
     # before setting it's status to active. We need to set the status
@@ -114,11 +109,10 @@ def import_image(image_repo, image_factory, task_input, uri):
     return image_id
 
 
-def create_image(image_repo, image_factory, image_properties):
-    _base_properties = ['checksum', 'created_at', 'container_format',
-                        'disk_format', 'id', 'min_disk', 'min_ram',
-                        'name', 'size', 'status', 'tags', 'updated_at',
-                        'visibility', 'protected']
+def create_image(image_repo, image_factory, image_properties, task_id):
+    _base_properties = []
+    for k, v in v2_api.get_base_properties().items():
+        _base_properties.append(k)
 
     properties = {}
     # NOTE: get the base properties
@@ -126,7 +120,11 @@ def create_image(image_repo, image_factory, image_properties):
         try:
             properties[key] = image_properties.pop(key)
         except KeyError:
-            pass
+            msg = _("Task ID %(task_id)s: Ignoring property %(k)s for setting "
+                    "base properties while creating "
+                    "Image.") % {'task_id': task_id, 'k': key}
+            LOG.debug(msg)
+
     # NOTE: get the rest of the properties and pass them as
     # extra_properties for Image to be created with them.
     properties['extra_properties'] = image_properties
@@ -137,20 +135,21 @@ def create_image(image_repo, image_factory, image_properties):
     return image
 
 
-def set_image_data(image, uri):
+def set_image_data(image, uri, task_id):
     data_iter = None
     try:
         LOG.info(_LI("Task %(task_id)s: Got image data uri %(data_uri)s to be "
                  "imported") % {"data_uri": uri, "task_id": task_id})
         data_iter = script_utils.get_image_data_iter(uri)
         image.set_data(data_iter)
-    except Exception as e:
-        LOG.warn(_LW("Task %(task_id)s failed with exception %(task_error)s") %
-                 {"task_error": str(e), "task_id": task_id})
-        LOG.info(_LI("Task %(task_id)s: Could not import image file"
-                     " %(image_data)s") % {"image_data": uri,
-                                           "task_id": task_id})
-        raise
+    except Exception:
+        with excutils.save_and_reraise_exception:
+            LOG.warn(_LW("Task %(task_id)s failed with exception "
+                         "%(task_error)s") % {"task_error": str(e),
+                                              "task_id": task_id})
+            LOG.info(_LI("Task %(task_id)s: Could not import image file"
+                         " %(image_data)s") % {"image_data": uri,
+                                               "task_id": task_id})
     finally:
         if isinstance(data_iter, file):
             data_iter.close()

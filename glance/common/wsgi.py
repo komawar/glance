@@ -79,7 +79,7 @@ eventlet_opts = [
                help=_('The number of child process workers that will be '
                       'created to service requests. The default will be '
                       'equal to the number of CPUs available.')),
-    cfg.StrOpt('eventlet_hub', default='poll',
+    cfg.StrOpt('eventlet_hub', default='selects',
                help=_('Name of eventlet hub to use. Traditionally, we have '
                       'only supported \'poll\', however \'selects\' may be '
                       'appropriate for some platforms. See '

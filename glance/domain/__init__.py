@@ -459,14 +459,14 @@ class TaskExecutorFactory(object):
 
     def new_task_executor(self, context):
         try:
-            executor = ('glance.async.%s_executor.'
-                        'TaskExecutor' % CONF.task.task_executor)
-            LOG.debug(("Loading %s executor") % CONF.task.task_executor)
-            return importutils.import_object(executor,
-                                             context,
-                                             self.task_repo,
-                                             self.image_repo,
-                                             self.image_factory)
+            executor_cls = ('glance.async.%s_executor.'
+                            'TaskExecutor' % CONF.task.task_executor)
+            LOG.debug("Loading %s executor" % CONF.task.task_executor)
+            executor = importutils.import_class(executor_cls)
+            return executor(context,
+                            self.task_repo,
+                            self.image_repo,
+                            self.image_factory)
         except ImportError:
             with excutils.save_and_reraise_exception():
                 LOG.exception(_LE("Failed to load the %s executor provided "

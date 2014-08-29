@@ -55,10 +55,10 @@ class TestImageImport(test_utils.BaseTestCase):
                 self.assertEqual(
                     image_id,
                     image_import_script.import_image(image_repo, image_factory,
-                                                     task_input, uri))
+                                                     task_input, None, uri))
                 self.assertEqual('active', image.status)
                 self.assertTrue(image_repo.save.called)
-                mock_set_img_data.assert_called_once_with(image, uri)
+                mock_set_img_data.assert_called_once_with(image, uri, None)
                 self.assertTrue(image_repo.get.called)
                 self.assertTrue(image_repo.save.called)
 
@@ -76,15 +76,17 @@ class TestImageImport(test_utils.BaseTestCase):
         self.assertEqual(image,
                          image_import_script.create_image(image_repo,
                                                           image_factory,
-                                                          image_properties))
+                                                          image_properties,
+                                                          None))
 
     def test_set_image_data_http(self):
         uri = 'http://www.example.com'
         image = mock.Mock()
-        self.assertEqual(None, image_import_script.set_image_data(image, uri))
+        self.assertEqual(None,
+                         image_import_script.set_image_data(image, uri, None))
 
     def test_set_image_data_http_error(self):
         uri = 'blahhttp://www.example.com'
         image = mock.Mock()
         self.assertRaises(urllib2.URLError,
-                          image_import_script.set_image_data, image, uri)
+                          image_import_script.set_image_data, image, uri, None)

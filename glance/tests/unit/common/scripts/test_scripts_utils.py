@@ -59,64 +59,64 @@ class TestScriptsUtils(test_utils.BaseTestCase):
         self.assertIn('disk_format', properties)
         self.assertIn('container_format', properties)
 
-    def test_format_location_http(self):
+    def test_validate_location_http(self):
         location = 'http://example.com'
         self.assertEqual(location,
-                         script_utils.format_location_uri(location))
+                         script_utils.validate_location_uri(location))
 
-    def test_format_location_https(self):
+    def test_validate_location_https(self):
         location = 'https://example.com'
         self.assertEqual(location,
-                         script_utils.format_location_uri(location))
+                         script_utils.validate_location_uri(location))
 
-    def test_format_location_none_error(self):
+    def test_validate_location_none_error(self):
         self.assertRaises(exception.BadStoreUri,
-                          script_utils.format_location_uri, '')
+                          script_utils.validate_location_uri, '')
 
-    def test_format_location_file_location_error(self):
-        self.assertRaises(StandardError, script_utils.format_location_uri,
+    def test_validate_location_file_location_error(self):
+        self.assertRaises(StandardError, script_utils.validate_location_uri,
                           "file:///tmp")
 
-    def test_format_location_unsupported_error(self):
+    def test_validate_location_unsupported_error(self):
         location = 'swift'
         self.assertRaises(urllib2.URLError,
-                          script_utils.format_location_uri, location)
+                          script_utils.validate_location_uri, location)
 
         location = 'swift+http'
         self.assertRaises(urllib2.URLError,
-                          script_utils.format_location_uri, location)
+                          script_utils.validate_location_uri, location)
 
         location = 'swift+https'
         self.assertRaises(urllib2.URLError,
-                          script_utils.format_location_uri, location)
+                          script_utils.validate_location_uri, location)
 
         location = 'swift+config'
         self.assertRaises(urllib2.URLError,
-                          script_utils.format_location_uri, location)
+                          script_utils.validate_location_uri, location)
 
         location = 'vsphere'
         self.assertRaises(urllib2.URLError,
-                          script_utils.format_location_uri, location)
+                          script_utils.validate_location_uri, location)
 
         location = 'sheepdog://'
         self.assertRaises(urllib2.URLError,
-                          script_utils.format_location_uri, location)
+                          script_utils.validate_location_uri, location)
 
         location = 's3+https://'
         self.assertRaises(urllib2.URLError,
-                          script_utils.format_location_uri, location)
+                          script_utils.validate_location_uri, location)
 
         location = 'rbd://'
         self.assertRaises(urllib2.URLError,
-                          script_utils.format_location_uri, location)
+                          script_utils.validate_location_uri, location)
 
         location = 'gridfs://'
         self.assertRaises(urllib2.URLError,
-                          script_utils.format_location_uri, location)
+                          script_utils.validate_location_uri, location)
 
         location = 'cinder://'
         self.assertRaises(urllib2.URLError,
-                          script_utils.format_location_uri, location)
+                          script_utils.validate_location_uri, location)
 
     def test_get_image_data_http(self):
         uri = "http://example.com"

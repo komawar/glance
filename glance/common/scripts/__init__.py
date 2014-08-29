@@ -30,8 +30,8 @@ def run_task(task_id, task_type, context,
     #TODO(nikhil): if image_repo is None get new image repo
     #TODO(nikhil): if image_factory is None get new image factory
     LOG.info(_LI("Loading known task scripts for task_id %(task_id)s "
-                 "of type %(task_type)s") % {'task_id': task_id,
-                                             'task_type': task_type})
+                 "of type %(task_type)s"), {'task_id': task_id,
+                                            'task_type': task_type})
     if task_type == 'import':
         image_import.run(task_id, context, task_repo,
                          image_repo, image_factory)
@@ -44,3 +44,9 @@ def run_task(task_id, task_type, context,
         LOG.error(msg)
         task = task_repo.get(task_id)
         task.fail(msg)
+        if task_repo:
+            task_repo.save(task)
+        else:
+            LOG.error(_LE("Failed to save task %(task_id)s in DB as task_repo "
+                          "is %(task_repo)s"), {"task_id": task_id,
+                                                "task_repo": task_repo})

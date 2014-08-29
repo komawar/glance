@@ -1272,6 +1272,15 @@ should be used by the Glance service to process the task.
 
 Optional. Default: ``eventlet``
 
+The config value ``eventlet_executor_pool_size`` is used to configure the
+eventlet task executor. It sets the maximum on the number of threads which can
+be spun up at any given point of time, that are used for the execution of
+Glance Tasks.
+
+* ``eventlet_executor_pool_size=<Size_of_pool_in_int>``
+
+Optional. Default: ``1000`
+
 Configuring Glance performance profiling
 ----------------------------------------
 

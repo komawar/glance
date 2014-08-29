@@ -15,12 +15,14 @@
 
 from oslo.config import cfg
 
+from glance import i18n
 import glance.openstack.common.log as logging
 
 
 CONF = cfg.CONF
 CONF.import_opt('known_task_executors', 'glance.common.config', group='task')
 LOG = logging.getLogger(__name__)
+_LE = i18n._LE
 
 
 class TaskExecutor(object):
@@ -35,8 +37,8 @@ class TaskExecutor(object):
         It also gives abstraction for the standard pre-processing and
         post-processing operations to be executed by a task. These may include
         validation checks, security checks, introspection, error handling etc.
-        The aim is to give developers an abstract sense of the execution pipeline
-        logic.
+        The aim is to give developers an abstract sense of the execution
+        pipeline logic.
 
     Args:
         context: glance.context.RequestContext object for AuthZ and AuthN

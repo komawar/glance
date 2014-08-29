@@ -63,13 +63,16 @@ task_opts = [
                                                   group='DEFAULT')]),
     cfg.StrOpt('task_executor',
                default='eventlet',
-               help=_("The executor to be used to process task operations.")),
+               help=_("Specifies which task executor to be used to run the "
+                      "task scripts.")),
     cfg.ListOpt('known_task_executors',
                 default=["eventlet", ],
                 help=_("The list of known task executors.")),
     cfg.IntOpt('eventlet_executor_pool_size',
                default=1000,
-               help=_("The executor to be used to process task operations.")),
+               help=_("Specifies the maximum number of eventlet threads which "
+                      "can be spun up by the eventlet based task executor to "
+                      "perform execution of Glance tasks.")),
 ]
 common_opts = [
     cfg.BoolOpt('allow_additional_image_properties', default=True,
